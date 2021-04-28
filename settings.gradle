@@ -1,4 +1,0 @@
-include ':extensions:individual:en:royalroad'
-include ':stubs'
-include ':core'
-rootProject.name = "NovelLibrary-Extensions"

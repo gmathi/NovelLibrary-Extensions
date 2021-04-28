@@ -1,8 +1,8 @@
 [
   {
     "name": "NovelLibrary: RoyalRoad",
-    "pkg": "io.github.gmathi.novellibrary.extension.en.clonemanga",
-    "apk": "novellibrary-en.royalroad-v1.0.0.apk",
+    "pkg": "io.github.gmathi.novellibrary.extension.en.royalroad",
+    "apk": "novellibrary-en.royalroad-v1.0.1.apk",
     "lang": "en",
     "code": 1,
     "version": "1.0.0",

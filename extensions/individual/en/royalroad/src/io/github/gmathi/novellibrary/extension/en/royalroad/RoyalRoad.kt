@@ -1,6 +1,5 @@
 package io.github.gmathi.novellibrary.extension.en.royalroad
 
-
 import io.github.gmathi.novellibrary.model.database.Novel
 import io.github.gmathi.novellibrary.model.database.WebPage
 import io.github.gmathi.novellibrary.model.source.filter.FilterList
@@ -13,7 +12,6 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-
 
 class RoyalRoad : ParsedHttpSource() {
 
@@ -30,8 +28,8 @@ class RoyalRoad : ParsedHttpSource() {
         get() = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+            .add("User-Agent", USER_AGENT)
+            .add("Referer", baseUrl)
 
     //region Search Novel
     override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
@@ -46,13 +44,10 @@ class RoyalRoad : ParsedHttpSource() {
         novel.imageUrl = element.selectFirst("img[src]")?.attr("abs:src")
         novel.metadata["Author(s)"] = element.selectFirst("span.author")?.text()?.substring(3)
         if (novel.metadata["Author(s)"] == null && novel.imageUrl?.startsWith("https://www.royalroadcdn.com/") == true)
-            novel.metadata["Author(s)"] = novel.imageUrl?.substring(
-                29, novel.imageUrl?.indexOf('/', 29)
-                    ?: 0
-            )
+            novel.metadata["Author(s)"] = novel.imageUrl?.substring(29, novel.imageUrl?.indexOf('/', 29) ?: 0)
         novel.rating = element.selectFirst("span.star[title]").attr("title")
         novel.longDescription = element.selectFirst("div.fiction-description")?.text()
-            ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
+                ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
         novel.shortDescription = novel.longDescription?.split("\n")?.firstOrNull()
         return novel
     }
@@ -87,7 +82,6 @@ class RoyalRoad : ParsedHttpSource() {
 
     //region stubs
 
-
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(NOT_USED)
     override fun latestUpdatesSelector(): String = throw Exception(NOT_USED)
     override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(NOT_USED)
@@ -99,7 +93,6 @@ class RoyalRoad : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = throw Exception(NOT_USED)
 
 //endregion
-
 
     companion object {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +

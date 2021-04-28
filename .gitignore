@@ -86,3 +86,7 @@ lint/tmp/
 
 #MAC_OS 
 *.DS_STORE
+
+*.keystore
+.idea/*
+release/

@@ -1,3 +1,4 @@
+include ':extensions:individual:en:scribblehub'
 include ':extensions:individual:en:royalroad'
 include ':stubs'
 include ':core'

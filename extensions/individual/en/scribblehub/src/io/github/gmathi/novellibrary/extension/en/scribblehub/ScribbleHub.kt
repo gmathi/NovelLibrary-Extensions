@@ -1,4 +1,4 @@
-package io.github.gmathi.novellibrary.extensions.en.scribblehub
+package io.github.gmathi.novellibrary.extension.en.scribblehub
 
 import io.github.gmathi.novellibrary.model.database.Novel
 import io.github.gmathi.novellibrary.model.database.WebPage
@@ -14,9 +14,10 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
+class ScribbleHub : ParsedHttpSource() {
 
-class ScribbleHubSource : ParsedHttpSource() {
-
+    override val id: Long
+        get() = 6L
     override val baseUrl: String
         get() = "https://www.scribblehub.com"
     override val lang: String
@@ -61,7 +62,6 @@ class ScribbleHubSource : ParsedHttpSource() {
         novel.imageUrl = pageElement.select("div.fic_image > img").attr("abs:src")
         novel.metadata["Author(s)"] = pageElement.select("span[property='author'] a").outerHtml()
 
-
         val genresElements = pageElement.select("span.wi_fic_genre a.fic_genre")
         novel.genres = genresElements.map { it.text() }
         novel.metadata["Genre(s)"] = genresElements.joinToString(", ") { it.outerHtml() }
@@ -80,7 +80,6 @@ class ScribbleHubSource : ParsedHttpSource() {
     //endregion
 
     //region Chapters
-
 
     override fun chapterListSelector() = "a[href]"
     override fun chapterFromElement(element: Element) =
@@ -112,7 +111,6 @@ class ScribbleHubSource : ParsedHttpSource() {
 
     //region stubs
 
-
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(NOT_USED)
     override fun latestUpdatesSelector(): String = throw Exception(NOT_USED)
     override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(NOT_USED)
@@ -125,9 +123,8 @@ class ScribbleHubSource : ParsedHttpSource() {
 
 //endregion
 
-
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
     }
 }

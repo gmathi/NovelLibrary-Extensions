@@ -43,9 +43,9 @@ dependencies {
 
     final okhttp_version = '5.0.0-alpha.2'
     compileOnly "com.squareup.okhttp3:okhttp:$okhttp_version"
-    compileOnly "com.squareup.okhttp3:logging-interceptor:$okhttp_version"
-    compileOnly "com.squareup.okhttp3:okhttp-dnsoverhttps:$okhttp_version"
-    compileOnly 'com.squareup.okio:okio:3.0.0-alpha.1'
+//    compileOnly "com.squareup.okhttp3:logging-interceptor:$okhttp_version"
+//    compileOnly "com.squareup.okhttp3:okhttp-dnsoverhttps:$okhttp_version"
+//    compileOnly 'com.squareup.okio:okio:3.0.0-alpha.1'
 
     compileOnly 'io.reactivex:rxjava:1.3.8'
     compileOnly 'org.jsoup:jsoup:1.13.1'

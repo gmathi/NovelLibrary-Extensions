@@ -15,6 +15,8 @@ import java.net.URLEncoder
 
 class RoyalRoad : ParsedHttpSource() {
 
+    override val id: Long
+        get() = 5L
     override val baseUrl: String
         get() = "https://www.royalroad.com"
     override val lang: String
@@ -28,8 +30,8 @@ class RoyalRoad : ParsedHttpSource() {
         get() = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-            .add("User-Agent", USER_AGENT)
-            .add("Referer", baseUrl)
+        .add("User-Agent", USER_AGENT)
+        .add("Referer", baseUrl)
 
     //region Search Novel
     override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
@@ -47,7 +49,7 @@ class RoyalRoad : ParsedHttpSource() {
             novel.metadata["Author(s)"] = novel.imageUrl?.substring(29, novel.imageUrl?.indexOf('/', 29) ?: 0)
         novel.rating = element.selectFirst("span.star[title]").attr("title")
         novel.longDescription = element.selectFirst("div.fiction-description")?.text()
-                ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
+            ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
         novel.shortDescription = novel.longDescription?.split("\n")?.firstOrNull()
         return novel
     }
@@ -96,6 +98,6 @@ class RoyalRoad : ParsedHttpSource() {
 
     companion object {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
     }
 }

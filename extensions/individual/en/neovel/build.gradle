@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Neovel'
+    pkgNameSuffix = 'en.neovel'
+    extClass = '.Neovel'
+    extVersionCode = 1
+    libVersion = '1.0'
+}
+
+apply from: "$rootDir/common.gradle"

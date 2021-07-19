@@ -43,7 +43,7 @@ inline val JsonElement.asJsonNullFreeString: String?
         else -> this.asString
     }
 
-inline val JsonElement.covertJsonNull: JsonElement?
+inline val JsonElement.asJsonNullFree: JsonElement?
     get() = when {
         this.isJsonNull -> null
         else -> this

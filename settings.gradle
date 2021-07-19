@@ -1,3 +1,4 @@
+include ':extensions:individual:en:wuxiaworldsite'
 include ':extensions:individual:en:novelfull'
 include ':extensions:individual:en:lnmtl'
 include ':extensions:individual:en:scribblehub'
@@ -7,3 +8,5 @@ include ':extensions:individual:en:royalroad'
 include ':stubs'
 include ':core'
 rootProject.name = "NovelLibrary-Extensions"
+include ':extensions:individual:en:jpmtl'
+include ':extensions:individual:en:boxnovel'

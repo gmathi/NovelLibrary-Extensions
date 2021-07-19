@@ -9,15 +9,17 @@ import io.github.gmathi.novellibrary.model.database.WebPage
 import io.github.gmathi.novellibrary.model.other.NovelsPage
 import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.HttpSource
+import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions
 import io.github.gmathi.novellibrary.util.network.asJsoup
 import io.github.gmathi.novellibrary.util.network.safeExecute
 import okhttp3.*
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.URLEncoder
 
-class LNMTL : HttpSource() {
+class LNMTL : ParsedHttpSource() {
 
     override val id: Long
         get() = 4L
@@ -42,7 +44,7 @@ class LNMTL : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList
-    ): Observable<NovelsPage> {
+    ): Request<NovelsPage> {
         if (shouldFetchNovels)
             getNovelsLNMTL()
 
@@ -56,7 +58,7 @@ class LNMTL : HttpSource() {
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, response: Response): Novel {
+    override fun novelDetailsParse(novel: Novel, response: Response): NovelsPage {
         val doc = response.asJsoup()
         val novelElement = doc.selectFirst(".novel .media")
         novel.imageUrl = novelElement.selectFirst("img[src]")?.attr("abs:src")
@@ -97,7 +99,7 @@ class LNMTL : HttpSource() {
     //endregion
 
     //region Chapters
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(novel: Element, response: Response): Novel<WebPage> {
         val chapters = ArrayList<WebPage>()
         val doc = response.asJsoup()
         val scripts = doc.select("script")
@@ -197,7 +199,7 @@ class LNMTL : HttpSource() {
     //endregion
 
     //region stubs
-    override fun popularNovelsRequest(page: Int): Request =
+    override fun popularNovelsRequest(page: Novel): Novel =
         throw Exception(Exceptions.MISSING_IMPLEMENTATION)
 
     override fun popularNovelsParse(response: Response): NovelsPage =
@@ -206,10 +208,10 @@ class LNMTL : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request =
         throw Exception(Exceptions.MISSING_IMPLEMENTATION)
 
-    override fun latestUpdatesParse(response: Response): NovelsPage =
+    override fun latestUpdatesParse(response: Element): WebPage =
         throw Exception(Exceptions.MISSING_IMPLEMENTATION)
 
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request =
+    override fun searchNovelsRequest(page: Novel, query: String, filters: FilterList): Request =
         throw Exception(
             Exceptions.MISSING_IMPLEMENTATION
         )

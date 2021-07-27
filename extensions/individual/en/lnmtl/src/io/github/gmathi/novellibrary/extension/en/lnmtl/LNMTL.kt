@@ -8,7 +8,6 @@ import io.github.gmathi.novellibrary.model.database.Novel
 import io.github.gmathi.novellibrary.model.database.WebPage
 import io.github.gmathi.novellibrary.model.other.NovelsPage
 import io.github.gmathi.novellibrary.model.source.filter.FilterList
-import io.github.gmathi.novellibrary.model.source.online.HttpSource
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions

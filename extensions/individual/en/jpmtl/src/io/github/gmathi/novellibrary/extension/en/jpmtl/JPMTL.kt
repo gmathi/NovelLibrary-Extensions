@@ -56,6 +56,7 @@ class JPMTL : ParsedHttpSource() {
             novel.metadata["id"] = id
             novel.externalNovelId = id
             novel.rating = resultObject["rating"]?.asJsonNullFree?.asFloat.toString()
+            novel.genres = resultObject["genres"].asJsonNullFree?.asJsonArray?.map { it.asJsonObject.get("name").asString }
             searchResults.add(novel)
         }
 
@@ -93,7 +94,7 @@ class JPMTL : ParsedHttpSource() {
         json["pen_name"]?.asJsonNullFreeString?.let { novel.metadata["pen_name"] = it }
         json["genre_name"]?.asJsonNullFreeString?.let {
             novel.metadata["genre_name"] = it
-            novel.genres = listOf(it)
+            // novel.genres = listOf(it)
         }
 
         return novel
@@ -116,16 +117,19 @@ class JPMTL : ParsedHttpSource() {
         val chapters = ArrayList<WebPage>()
         val id = novel.externalNovelId ?: throw Exception(MISSING_EXTERNAL_ID)
         val jsonString = response.body?.string() ?: throw Exception(Exceptions.NETWORK_ERROR)
+        var chapterIndex = 0
         val volumesArray = JsonParser.parseString(jsonString)?.asJsonArray ?: throw Exception(Exceptions.PARSING_ERROR)
-        volumesArray.forEachIndexed { volumeIndex, volumeElement ->
+        volumesArray.forEach { volumeElement ->
             val volumeJson = volumeElement?.asJsonNullFree?.asJsonObject ?: throw Exception(Exceptions.PARSING_ERROR)
-            volumeJson["chapters"].asJsonNullFree?.asJsonArray?.forEachIndexed { chapterIndex, chapterElement ->
+            volumeJson["chapters"].asJsonNullFree?.asJsonArray?.forEach { chapterElement ->
                 val chapterJson = chapterElement?.asJsonNullFree?.asJsonObject ?: throw Exception(Exceptions.PARSING_ERROR)
                 val chapterId = chapterJson["id"].asString
                 val title = chapterJson["title"].asJsonNullFreeString
                 val chapterUrl = "$baseUrl/books/$id/$chapterId/mobile"
-                val webPage = WebPage(chapterUrl, title ?: "$volumeIndex.$chapterIndex")
+                val index = "${chapterJson["volume_index"]}.${chapterJson["index"]}"
+                val webPage = WebPage(chapterUrl, "$index $title")
                 webPage.orderId = chapterIndex.toLong()
+                chapterIndex++
                 chapters.add(webPage)
             }
         }

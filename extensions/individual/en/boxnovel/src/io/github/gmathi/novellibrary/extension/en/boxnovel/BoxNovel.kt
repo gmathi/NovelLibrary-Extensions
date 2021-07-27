@@ -18,7 +18,7 @@ class BoxNovel : ParsedHttpSource() {
     override val id: Long
         get() = 5L
     override val baseUrl: String
-        get() = "https://www.royalroad.com"
+        get() = "https://boxnovel.com"
     override val lang: String
         get() = "en"
     override val supportsLatest: Boolean
@@ -36,44 +36,40 @@ class BoxNovel : ParsedHttpSource() {
     //region Search Novel
     override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "$baseUrl/fictions/search?title=${encodedQuery.replace(" ", "+")}&page=$page"
+        val url = "$baseUrl/?s=${encodedQuery.replace(" ", "+")}&post_type=wp-manga"
         return GET(url, headers)
     }
 
     override fun searchNovelsFromElement(element: Element): Novel {
-        val titleElement = element.selectFirst(".fiction-title > a[href]")
+        val titleElement = element.selectFirst("div.post-title a")
         val novel = Novel(titleElement.text(), titleElement.attr("abs:href"), id)
         novel.imageUrl = element.selectFirst("img[src]")?.attr("abs:src")
-        novel.metadata["Author(s)"] = element.selectFirst("span.author")?.text()?.substring(3)
-        if (novel.metadata["Author(s)"] == null && novel.imageUrl?.startsWith("https://www.royalroadcdn.com/") == true)
-            novel.metadata["Author(s)"] = novel.imageUrl?.substring(29, novel.imageUrl?.indexOf('/', 29) ?: 0)
-        novel.rating = element.selectFirst("span.star[title]").attr("title")
-        novel.longDescription = element.selectFirst("div.fiction-description")?.text()
-            ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
-        novel.shortDescription = novel.longDescription?.split("\n")?.firstOrNull()
+        novel.authors = element.selectFirst("div.post-content_item.mg_author div.summary-content")?.children()?.map { it.text() }
+        novel.genres = element.selectFirst("div.post-content_item.mg_genres div.summary-content")?.children()?.map { it.text() }
+        novel.rating = element.selectFirst("span.score.font-meta.total_votes").text()
         return novel
     }
 
-    override fun searchNovelsSelector() = "div.fiction-list > div"
+    override fun searchNovelsSelector() = "div.c-tabs-item__content"
     override fun searchNovelsNextPageSelector() = "a:contains(Last)"
     //endregion
 
     //region Novel Details
     override fun novelDetailsParse(novel: Novel, document: Document): Novel {
-
-        novel.imageUrl = document.head().selectFirst("meta[property=og:image]")?.attr("content")
-        novel.rating = document.head().selectFirst("meta[property=books:rating:value]")?.attr("content")
-        novel.longDescription = document.body().selectFirst("div[property=description]")?.text()
-        novel.genres = document.body().select("[property=genre]")?.map { it.text() }
-
-        novel.metadata["Author(s)"] = document.head().selectFirst("meta[property=books:author]")?.attr("content")
-
+        novel.imageUrl = document.body().selectFirst("div.summary_image img[src]")?.attr("abs:src")
+        novel.longDescription = document.body().selectFirst("div.description-summary")?.text()
+        document.body().select("div.post-content_item")?.forEach {
+            val heading = it.select("div.summary-heading")?.first()?.text() ?: return@forEach
+            val value = it.select("div.summary-content")?.first()?.children()?.first()?.html()
+            novel.metadata[heading] = value
+        }
+        novel.chaptersCount = document.body().select("li.wp-manga-chapter a")?.count()?.toLong() ?: 0L
         return novel
     }
     //endregion
 
     //region Chapters
-    override fun chapterListSelector() = "table#chapters a[href]"
+    override fun chapterListSelector() = "li.wp-manga-chapter a"
     override fun chapterFromElement(element: Element) = WebPage(element.absUrl("href"), element.text())
 
     override fun chapterListRequest(novel: Novel): Request {
@@ -98,6 +94,6 @@ class BoxNovel : ParsedHttpSource() {
 
     companion object {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
     }
 }

@@ -17,8 +17,6 @@ import java.net.URLEncoder
 
 class BoxNovel : ParsedHttpSource() {
 
-    override val id: Long
-        get() = 5L
     override val baseUrl: String
         get() = "https://boxnovel.com"
     override val lang: String

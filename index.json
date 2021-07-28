@@ -56,10 +56,10 @@
   {
       "name": "NovelLibrary: BoxNovel",
       "pkg": "io.github.gmathi.novellibrary.extension.en.boxnovel",
-      "apk": "novellibrary-en.boxnovel-v1.0.1.apk",
+      "apk": "novellibrary-en.boxnovel-v1.0.2.apk",
       "lang": "en",
-      "code": 1,
-      "version": "1.0.1",
+      "code": 2,
+      "version": "1.0.2",
       "nsfw": 0
   }
 ]

@@ -6,9 +6,11 @@ import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
+import io.github.gmathi.novellibrary.util.network.asJsoup
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -24,7 +26,7 @@ class BoxNovel : ParsedHttpSource() {
     override val supportsLatest: Boolean
         get() = true
     override val name: String
-        get() = "Royal Road"
+        get() = "Box Novel"
 
     override val client: OkHttpClient
         get() = network.cloudflareClient
@@ -69,11 +71,18 @@ class BoxNovel : ParsedHttpSource() {
     //endregion
 
     //region Chapters
-    override fun chapterListSelector() = "li.wp-manga-chapter a"
-    override fun chapterFromElement(element: Element) = WebPage(element.absUrl("href"), element.text())
-
     override fun chapterListRequest(novel: Novel): Request {
         return GET(novel.url, headers = headers)
+    }
+    override fun chapterListSelector() = "li.wp-manga-chapter a"
+    override fun chapterFromElement(element: Element) = WebPage(element.absUrl("href"), element.text())
+    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector()).reversed().mapIndexed { index, element ->
+            val chapter = chapterFromElement(element)
+            chapter.orderId = index.toLong()
+            chapter
+        }
     }
 
     //endregion

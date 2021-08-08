@@ -11,9 +11,11 @@ import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions
+import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
 import io.github.gmathi.novellibrary.util.network.asJsoup
 import io.github.gmathi.novellibrary.util.network.safeExecute
 import okhttp3.*
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.URLEncoder
@@ -43,7 +45,7 @@ class LNMTL : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList
-    ): Request<NovelsPage> {
+    ): Observable<NovelsPage> {
         if (shouldFetchNovels)
             getNovelsLNMTL()
 
@@ -57,7 +59,7 @@ class LNMTL : ParsedHttpSource() {
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, response: Response): NovelsPage {
+    override fun novelDetailsParse(novel: Novel, response: Response): Novel {
         val doc = response.asJsoup()
         val novelElement = doc.selectFirst(".novel .media")
         novel.imageUrl = novelElement.selectFirst("img[src]")?.attr("abs:src")
@@ -95,10 +97,9 @@ class LNMTL : ParsedHttpSource() {
 
         return novel
     }
-    //endregion
 
-    //region Chapters
-    override fun chapterListParse(novel: Element, response: Response): Novel<WebPage> {
+    //endregion
+    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
         val chapters = ArrayList<WebPage>()
         val doc = response.asJsoup()
         val scripts = doc.select("script")
@@ -148,6 +149,7 @@ class LNMTL : ParsedHttpSource() {
         }
         return chapters
     }
+
     //endregion
 
     //region Other Helper Methods
@@ -198,25 +200,37 @@ class LNMTL : ParsedHttpSource() {
     //endregion
 
     //region stubs
-    override fun popularNovelsRequest(page: Novel): Novel =
-        throw Exception(Exceptions.MISSING_IMPLEMENTATION)
 
-    override fun popularNovelsParse(response: Response): NovelsPage =
-        throw Exception(Exceptions.MISSING_IMPLEMENTATION)
+    override fun popularNovelsRequest(page: Int): Request = throw Exception(NOT_USED)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw Exception(Exceptions.MISSING_IMPLEMENTATION)
+    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request = throw Exception(NOT_USED)
 
-    override fun latestUpdatesParse(response: Element): WebPage =
-        throw Exception(Exceptions.MISSING_IMPLEMENTATION)
+    override fun latestUpdatesRequest(page: Int): Request = throw Exception(NOT_USED)
 
-    override fun searchNovelsRequest(page: Novel, query: String, filters: FilterList): Request =
-        throw Exception(
-            Exceptions.MISSING_IMPLEMENTATION
-        )
+    override fun popularNovelsSelector(): String = throw Exception(NOT_USED)
 
-    override fun searchNovelsParse(response: Response): NovelsPage =
-        throw Exception(Exceptions.MISSING_IMPLEMENTATION)
+    override fun popularNovelsFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
+    override fun popularNovelNextPageSelector(): String = throw Exception(NOT_USED)
+
+    override fun searchNovelsSelector(): String = throw Exception(NOT_USED)
+
+    override fun searchNovelsFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
+    override fun searchNovelsNextPageSelector(): String = throw Exception(NOT_USED)
+
+    override fun latestUpdatesSelector(): String = throw Exception(NOT_USED)
+
+    override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
+    override fun latestUpdatesNextPageSelector(): String = throw Exception(NOT_USED)
+
+    override fun novelDetailsParse(novel: Novel, document: Document): Novel = throw Exception(NOT_USED)
+
+    override fun chapterListSelector(): String = throw Exception(NOT_USED)
+
+    override fun chapterFromElement(element: Element): WebPage = throw Exception(NOT_USED)
+
     //endregion
 
     companion object {

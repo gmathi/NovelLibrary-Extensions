@@ -2,9 +2,9 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 ext {
-    extName = 'BoxNovel'
-    pkgNameSuffix = 'en.boxnovel'
-    extClass = '.BoxNovel'
+    extName = 'Ranobes'
+    pkgNameSuffix = 'en.ranobes'
+    extClass = '.Ranobes'
     extVersionCode = 1
     libVersion = '1.0'
 }

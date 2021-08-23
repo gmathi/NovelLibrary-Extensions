@@ -139,7 +139,9 @@ class Neovel : HttpSource() {
             Comparator<NeovelChapter> { o1, o2 ->
                 val volumeDifference =
                     (o1.chapterVolume * 100).toInt() - (o2.chapterVolume * 100).toInt()
-                if (volumeDifference != 0) volumeDifference // returns the volume difference
+                if (volumeDifference != 0)
+                    volumeDifference  // returns the volume difference
+
                 val chapterDifference =
                     (o1.chapterNumber * 100).toInt() - (o2.chapterNumber * 100).toInt()
                 chapterDifference // else returns the chapter difference

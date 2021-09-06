@@ -5,12 +5,11 @@ import io.github.gmathi.novellibrary.model.database.WebPage
 import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
+import io.github.gmathi.novellibrary.network.POST
+import io.github.gmathi.novellibrary.util.Exceptions
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
 import io.github.gmathi.novellibrary.util.network.asJsoup
-import okhttp3.Headers
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.*
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -63,14 +62,22 @@ class BoxNovel : ParsedHttpSource() {
             val value = it.select("div.summary-content")?.first()?.children()?.first()?.html()
             novel.metadata[heading] = value
         }
-        novel.chaptersCount = document.body().select("li.wp-manga-chapter a")?.count()?.toLong() ?: 0L
+        val externalId = document.body().select("input.rating-post-id[type=hidden]").attr("value")
+        novel.externalNovelId = externalId
+        novel.metadata["PostId"] = externalId
         return novel
     }
     //endregion
 
     //region Chapters
     override fun chapterListRequest(novel: Novel): Request {
-        return GET(novel.url, headers = headers)
+        val novelId = novel.externalNovelId ?: novel.metadata["PostId"] ?: throw Exception(Exceptions.INVALID_NOVEL)
+        val url = "$baseUrl/wp-admin/admin-ajax.php"
+        val formBody: RequestBody = FormBody.Builder()
+            .add("action", "manga_get_chapters")
+            .add("manga", novelId)
+            .build()
+        return POST(url, body = formBody)
     }
     override fun chapterListSelector() = "li.wp-manga-chapter a"
     override fun chapterFromElement(element: Element) = WebPage(element.absUrl("href"), element.text())

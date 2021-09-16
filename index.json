@@ -65,10 +65,10 @@
   {
       "name": "NovelLibrary: WuxiaWorldSite",
       "pkg": "io.github.gmathi.novellibrary.extension.en.wuxiaworldsite",
-      "apk": "novellibrary-en.wuxiaworldsite-v1.0.1.apk",
+      "apk": "novellibrary-en.wuxiaworldsite-v1.0.2.apk",
       "lang": "en",
-      "code": 1,
-      "version": "1.0.1",
+      "code": 2,
+      "version": "1.0.2",
       "nsfw": 0
   }
 ]

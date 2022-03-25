@@ -1,4 +1,4 @@
-# {WIP}|
+
 # NovelLibrary-Extensions
 Extensions for NovelLibrary
 

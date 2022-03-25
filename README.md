@@ -73,22 +73,8 @@ Goto `settings.gradle` file and add this entry.
 include ':extensions:individual:en:xyz'
 ```
 
+![image](https://user-images.githubusercontent.com/5333537/160157710-564394fc-f0d2-406b-a513-fcadec554a19.png)
+
 Resync the project and you should have your extension ready to work with. 
 
-
-- Right click on `en` in `extensions`.`individual`.`en` and go to `Add New Module`.
-
-![image](https://user-images.githubusercontent.com/5333537/160046577-61527424-34bf-4b13-909a-1323f0c7f6d8.png)
-
-- Copy this package name - `io.github.gmathi.novellibrary.extension.en.{replace with your source name}`, so in this case it will be `io.github.gmathi.novellibrary.extension.en.xyz`. And fill the details and make sure they look the same as below image. Make sure to uncheck the .kts gradle option.
-
-![image](https://user-images.githubusercontent.com/5333537/160047224-c59c0f01-3172-47be-9391-0b6c8b1d0588.png)
-
-- Click `Next` and select `Blank Activity`. Hit finish.
-
-![image](https://user-images.githubusercontent.com/5333537/160047042-57893904-5ee2-49a2-a41a-e9b6b428816d.png)
-
-
-
-If you have done all the steps correctly as above, then you will see the new entry after you have re-opened / resynced the project.
-
+Now open the `Xyz.kt` file and start making the changes to make sure you get your data.

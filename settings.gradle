@@ -8,6 +8,7 @@ include ':extensions:individual:en:royalroad'
 include ':extensions:individual:en:jpmtl'
 include ':extensions:individual:en:boxnovel'
 include ':extensions:individual:en:ranobes'
+include ':extensions:individual:en:novelbuddy'
 include ':stubs'
 include ':core'
 rootProject.name = "NovelLibrary-Extensions"

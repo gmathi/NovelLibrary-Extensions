@@ -28,14 +28,15 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+    namespace 'io.github.gmathi.novellibrary'
 }
 
 dependencies {
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation 'androidx.core:core-ktx:1.3.2'
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.3.0'
+    implementation 'androidx.core:core-ktx:1.10.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.8.0'
 
     compileOnly 'com.github.inorichi.injekt:injekt-core:65b0440'
 
@@ -46,7 +47,7 @@ dependencies {
 //    compileOnly 'com.squareup.okio:okio:3.0.0-alpha.1'
 
     compileOnly 'io.reactivex:rxjava:1.3.8'
-    compileOnly 'org.jsoup:jsoup:1.13.1'
-    compileOnly 'com.google.code.gson:gson:2.8.6'
+    compileOnly 'org.jsoup:jsoup:1.15.4'
+    compileOnly 'com.google.code.gson:gson:2.10.1'
     compileOnly 'com.github.salomonbrys.kotson:kotson:2.5.0'
 }

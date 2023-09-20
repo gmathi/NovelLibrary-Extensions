@@ -90,3 +90,4 @@ lint/tmp/
 *.keystore
 .idea/*
 release/
+extensions/individual/en/novelbuddy/debug/output-metadata.json

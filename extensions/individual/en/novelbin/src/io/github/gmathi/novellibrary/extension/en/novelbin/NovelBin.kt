@@ -1,4 +1,4 @@
-package io.github.gmathi.novellibrary.extension.en.novelbuddy
+package io.github.gmathi.novellibrary.extension.en.novelbin
 
 import io.github.gmathi.novellibrary.model.database.Novel
 import io.github.gmathi.novellibrary.model.database.WebPage
@@ -16,18 +16,17 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import java.util.regex.Pattern
 
-class NovelBuddy : ParsedHttpSource() {
+class NovelBin : ParsedHttpSource() {
 
     override val baseUrl: String
-        get() = "https://novelbuddy.com"
+        get() = "https://novelbin.org"
     override val lang: String
         get() = "en"
     override val supportsLatest: Boolean
         get() = true
     override val name: String
-        get() = "Novel Buddy"
+        get() = "Novel Bin"
 
     override val client: OkHttpClient
         get() = network.cloudflareClient
@@ -39,59 +38,65 @@ class NovelBuddy : ParsedHttpSource() {
     //region Search Novel
     override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "$baseUrl/search?status=all&sort=views&q=${encodedQuery.replace(" ", "+")}&page=$page"
+        val url = "$baseUrl/search?keyword=${encodedQuery.replace(" ", "+")}&page=$page"
         return GET(url, headers)
     }
 
     override fun searchNovelsParse(response: Response): NovelsPage {
         val document = response.asJsoup()
 
-        val novels = document.select(searchNovelsSelector()).map { element ->
-            searchNovelsFromElement(element)
-        }
+        val novels = document.select("div.list.list-novel").firstOrNull()?.select("div.row")
+            ?.map { element ->
+                searchNovelsFromElement(element)
+            }
 
-        val isLastPage = document.select("div.paginator a.btn.link").lastOrNull()?.hasClass("active") ?: true
-        return NovelsPage(novels, !isLastPage)
+        val hasNextPage =
+            document.select("li.next").firstOrNull() != null && document.select("li.next.disabled")
+                .firstOrNull() == null
+
+        return NovelsPage(novels ?: emptyList(), hasNextPage)
     }
 
     override fun searchNovelsFromElement(element: Element): Novel {
-        val aElement = element.selectFirst("a[href]")
         val novel = Novel(
-            aElement.attr("title"),
-            aElement.attr("abs:href"),
+            element.select("h3.novel-title").text(),
+            element.select("h3.novel-title").select("a[href]").attr("abs:href"),
             this.id
         )
-        novel.imageUrl = element.selectFirst("img").attr("abs:data-src")
-        novel.rating = element.selectFirst("div.rating span.score").text()
+        novel.imageUrl = element.select("img.cover").attr("abs:src")
         return novel
     }
 
-    override fun searchNovelsSelector() = "div.list.manga-list div.book-detailed-item"
+    override fun searchNovelsSelector() = "div.list.list-novel div.row"
     override fun searchNovelsNextPageSelector() = "li.next"
     //endregion
 
     //region Novel Details
     override fun novelDetailsParse(novel: Novel, document: Document): Novel {
-        val booksElement = document.body().select("div.book-info")
-        val metaDataElement = booksElement.select("div.meta.box > p")
+        val booksElement = document.body().select("div.books")
+        val infoElements = document.body().select("ul.info").first().children()
+        novel.imageUrl = booksElement.select("div.book > img").attr("abs:src")
 
-        novel.genres = metaDataElement[1].select("a").map { it.text().replace(" ,", "") }
-        novel.longDescription =
-            document.body().select("div.summary > p.content").joinToString(separator = "\n") { it.text() }
+        infoElements.forEach { element ->
+            val title = element.select("h3").text()
+            val valueList = element.select("a[href]").map { it.text() }
+            val rawValueList = element.select("a[href]")
+                .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.text()}</a>" }
 
-        val script = document.body().select("script").firstOrNull { it.outerHtml().contains("bookId") }?.childNode(0)?.outerHtml()
-        val p = Pattern.compile("bookId\\s=\\s(.*?);", Pattern.DOTALL or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE or Pattern.MULTILINE) // Regex for the value of the key
-        val m = p.matcher(script ?: "")
-        if (m.find()) {
-            novel.externalNovelId = m.group(1)
+            if (title.contains("Author")) {
+                novel.authors = valueList
+                novel.metadata["Author(s)"] = rawValueList
+            } else if (title.contains("Genre")) {
+                novel.genres = valueList
+                novel.metadata["Genre(s)"] = rawValueList
+            } else {
+                novel.metadata[title] = rawValueList
+            }
         }
 
-        novel.metadata["Author(s)"] = metaDataElement[0].select("a")
-            .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.attr("title")}</a>" }
-        novel.metadata["Genre(s)"] = metaDataElement[2].select("a")
-            .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.text().replace(" ,", "")}</a>" }
-        novel.metadata["Status"] = metaDataElement[1].select("span").text()
-        novel.chaptersCount = metaDataElement[3].select("span").text().toLong()
+        novel.longDescription = document.body().select("div.desc-text").joinToString(separator = "\n") { it.text() }
+        novel.rating = (document.body().select("[itemprop=ratingValue]").first().text().toDouble() / 2).toString()
+        novel.externalNovelId = document.selectFirst("#rating")?.attr("data-novel-id")
 
         return novel
     }
@@ -99,27 +104,17 @@ class NovelBuddy : ParsedHttpSource() {
 
     //region Chapters
 
-    override fun chapterListSelector() = "ul#chapter-list > li"
+    override fun chapterListSelector() = "li a"
     override fun chapterFromElement(element: Element): WebPage {
-        val aElement = element.selectFirst("a")
-        val url = aElement.attr("abs:href")
-        val name = element.selectFirst(".chapter-title").text()
+        val url = element.attr("href")
+        val name = element.text()
         return WebPage(url, name)
     }
 
     override fun chapterListRequest(novel: Novel): Request {
         val id = novel.externalNovelId ?: throw Exception(MISSING_EXTERNAL_ID)
-        val url = "$baseUrl/api/manga/$id/chapters?source=detail"
+        val url = "$baseUrl/ajax/chapter-archive?novelId=$id"
         return GET(url, headers)
-    }
-
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).reversed().mapIndexed { index, element ->
-            val chapter = chapterFromElement(element)
-            chapter.orderId = index.toLong()
-            chapter
-        }
     }
 
     //endregion

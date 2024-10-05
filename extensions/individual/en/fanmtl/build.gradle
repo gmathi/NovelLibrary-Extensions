@@ -2,9 +2,9 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 ext {
-    extName = 'FanMTL'
-    pkgNameSuffix = 'en.fanmtl'
-    extClass = '.FanMTL'
+    extName = 'NovelBuddy'
+    pkgNameSuffix = 'en.novelbuddy'
+    extClass = '.NovelBuddy'
     extVersionCode = 1
     libVersion = '1.0'
 }

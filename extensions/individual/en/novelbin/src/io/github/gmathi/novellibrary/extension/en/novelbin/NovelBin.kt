@@ -63,7 +63,7 @@ class NovelBin : ParsedHttpSource() {
             element.select("h3.novel-title").select("a[href]").attr("abs:href"),
             this.id
         )
-        novel.imageUrl = element.select("img.cover").attr("abs:src")
+        novel.imageUrl = element.select("img.lazy").attr("abs:src")
         return novel
     }
 

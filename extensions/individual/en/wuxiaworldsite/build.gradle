@@ -9,4 +9,8 @@ ext {
     libVersion = '1.0'
 }
 
+android {
+    namespace = 'io.github.gmathi.novellibrary.extension.en.wuxiaworldsite'
+}
+
 apply from: "$rootDir/common.gradle"

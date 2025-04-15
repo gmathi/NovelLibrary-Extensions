@@ -2,11 +2,15 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 ext {
-    extName = 'FanMTL'
-    pkgNameSuffix = 'en.fanmtl'
-    extClass = '.FanMTL'
+    extName = 'LNMTL'
+    pkgNameSuffix = 'en.lnmtl'
+    extClass = '.LNMTL'
     extVersionCode = 1
     libVersion = '1.0'
+}
+
+android {
+    namespace = 'io.github.gmathi.novellibrary.extension.en.lnmtl'
 }
 
 apply from: "$rootDir/common.gradle"

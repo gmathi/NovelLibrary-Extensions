@@ -1,6 +1,7 @@
 apply plugin: 'org.jmailen.kotlinter'
 
 android {
+
     compileSdkVersion Config.compileSdk
     buildToolsVersion Config.buildTools
 

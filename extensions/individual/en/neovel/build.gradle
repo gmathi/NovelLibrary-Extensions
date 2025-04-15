@@ -5,8 +5,12 @@ ext {
     extName = 'Neovel'
     pkgNameSuffix = 'en.neovel'
     extClass = '.Neovel'
-    extVersionCode = 2
+    extVersionCode = 3
     libVersion = '1.0'
+}
+
+android {
+    namespace = 'io.github.gmathi.novellibrary.extension.en.neovel'
 }
 
 apply from: "$rootDir/common.gradle"

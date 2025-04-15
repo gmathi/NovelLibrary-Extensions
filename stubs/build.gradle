@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    compileSdkVersion 30
+    compileSdkVersion 34
     buildToolsVersion "30.0.3"
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 30
+        targetSdkVersion 33
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
@@ -33,12 +33,13 @@ android {
 
 dependencies {
 
+    //noinspection GradleDependency
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation 'androidx.core:core-ktx:1.10.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'androidx.core:core-ktx:1.16.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
 
-    compileOnly 'com.github.inorichi.injekt:injekt-core:65b0440'
+    compileOnly 'com.github.inorichi:injekt:v1.3.0'
 
     final okhttp_version = '5.0.0-alpha.2'
     compileOnly "com.squareup.okhttp3:okhttp:$okhttp_version"
@@ -47,7 +48,7 @@ dependencies {
 //    compileOnly 'com.squareup.okio:okio:3.0.0-alpha.1'
 
     compileOnly 'io.reactivex:rxjava:1.3.8'
-    compileOnly 'org.jsoup:jsoup:1.15.4'
+    compileOnly 'org.jsoup:jsoup:1.13.1'
     compileOnly 'com.google.code.gson:gson:2.10.1'
     compileOnly 'com.github.salomonbrys.kotson:kotson:2.5.0'
 }

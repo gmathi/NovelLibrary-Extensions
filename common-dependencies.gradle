@@ -1,4 +1,4 @@
-// used both in common.gradle and themesources library
+// used both in common.gradle and theme sources library
 dependencies {
 
     compileOnly project(':stubs')
@@ -14,9 +14,9 @@ dependencies {
 
     compileOnly 'io.reactivex:rxjava:1.3.8'
     compileOnly 'org.jsoup:jsoup:1.13.1'
-    compileOnly 'com.google.code.gson:gson:2.8.7'
+    compileOnly 'com.google.code.gson:gson:2.10.1'
     compileOnly 'com.github.salomonbrys.kotson:kotson:2.5.0'
-    compileOnly 'com.github.inorichi.injekt:injekt-core:65b0440'
+    compileOnly 'com.github.inorichi:injekt:v1.3.0'
 
 //    implementation project(":annotations")
 //    compileOnly project(':duktape-stub')

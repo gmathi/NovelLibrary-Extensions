@@ -3,6 +3,8 @@ plugins {
 }
 
 android {
+
+    namespace = "io.github.gmathi.novellibrary"
     compileSdkVersion(Config.compileSdk)
 
     defaultConfig {

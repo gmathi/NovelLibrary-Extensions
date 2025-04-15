@@ -1,5 +1,6 @@
 package io.github.gmathi.novellibrary.extension.en.neovel
 
+import com.github.salomonbrys.kotson.get
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
@@ -66,17 +67,23 @@ class Neovel : HttpSource() {
     //endregion
 
     //region Novel Details
+    override fun novelDetailsRequest(novel: Novel): Request {
+        val url = baseUrl + "V1/page/book?bookId=${novel.externalNovelId}&language=EN"
+        return GET(url, headers = headers)
+    }
+
     override fun novelDetailsParse(novel: Novel, response: Response): Novel {
         val jsonString = response.body?.string() ?: return novel
         val rootJsonObject = JsonParser.parseString(jsonString)?.asJsonObject ?: return novel
-        val id = rootJsonObject["id"].asInt.toString()
 
-        novel.imageUrl = "${baseUrl}V2/book/image?bookId=$id&oldApp=false"
-        novel.longDescription = rootJsonObject.get("bookDescription")?.asString
-        novel.rating = rootJsonObject["rating"].asFloat.toString()
-        novel.chaptersCount = rootJsonObject["nbrReleases"].asLong
-        novel.externalNovelId = id
-        novel.metadata["id"] = id
+        val authorsDto = rootJsonObject["authorsDto"]?.asJsonArray
+        val booksDto = rootJsonObject["bookDto"]?.asJsonObject
+
+        val authorsList = authorsDto?.mapNotNull { it["name"].asJsonNullFreeString }
+        novel.metadata["Author(s)"] = authorsList?.joinToString(", ")
+        novel.authors = authorsList
+        novel.longDescription = booksDto?.get("bookDescription")?.asString
+        novel.chaptersCount = booksDto?.get("nbrReleases")?.asLong ?: 0L
 
         // If local fetch copy is empty, then get it from network
         if (neovelGenres == null) {
@@ -84,10 +91,10 @@ class Neovel : HttpSource() {
         }
         neovelGenres?.let { map ->
             novel.genres =
-                rootJsonObject.getAsJsonArray("genreIds")?.filter { map[it.asInt] != null }
+                booksDto?.getAsJsonArray("genreIds")?.filter { map[it.asInt] != null }
                     ?.map { map[it.asInt]!! }
             novel.metadata["Genre(s)"] =
-                rootJsonObject.getAsJsonArray("tagIds")?.filter { map[it.asInt] != null }
+                booksDto?.getAsJsonArray("tagIds")?.filter { map[it.asInt] != null }
                     ?.joinToString(", ") { map[it.asInt]!! }
         }
 
@@ -97,21 +104,14 @@ class Neovel : HttpSource() {
         }
         neovelTags?.let { map ->
             novel.metadata["Tag(s)"] =
-                rootJsonObject.getAsJsonArray("tagIds")?.filter { map[it.asInt] != null }
+                booksDto?.getAsJsonArray("tagIds")?.filter { map[it.asInt] != null }
                     ?.joinToString(", ") { map[it.asInt]!! }
         }
 
-        novel.metadata["Author(s)"] = rootJsonObject.getAsJsonArray("authors")?.joinToString(", ") {
-            it.asJsonNullFreeString ?: ""
-        }
-        novel.metadata["Status"] = rootJsonObject["bookState"]?.asJsonNullFreeString ?: "N/A"
-        novel.metadata["Release Frequency"] =
-            rootJsonObject["releaseFrequency"]?.asJsonNullFreeString ?: "N/A"
-        novel.metadata["Chapter Read Count"] = rootJsonObject["chapterReadCount"]?.asInt.toString()
-        novel.metadata["Followers"] = rootJsonObject["followers"]?.asJsonNullFreeString ?: "N/A"
-        novel.metadata["Initial publish date"] =
-            rootJsonObject["votes"]?.asJsonNullFreeString ?: "N/A"
-        novel.metadata["Votes"] = rootJsonObject["origin_loc"]?.asJsonNullFreeString ?: "N/A"
+        novel.metadata["Release Frequency"] = booksDto?.get("releaseFrequency")?.asJsonNullFreeString ?: "N/A"
+        novel.metadata["Chapter Read Count"] = booksDto?.get("chapterReadCount")?.asInt.toString()
+        novel.metadata["Followers"] = booksDto?.get("followers")?.asJsonNullFreeString ?: "N/A"
+        novel.metadata["Mature Content"] = booksDto?.get("matureContent")?.asBoolean.toString()
         return novel
     }
     //endregion
@@ -137,14 +137,10 @@ class Neovel : HttpSource() {
 
         neovelChaptersArray.sortedWith(
             Comparator<NeovelChapter> { o1, o2 ->
-                val volumeDifference =
-                    (o1.chapterVolume * 100).toInt() - (o2.chapterVolume * 100).toInt()
-                if (volumeDifference != 0)
-                    volumeDifference  // returns the volume difference
-
-                val chapterDifference =
-                    (o1.chapterNumber * 100).toInt() - (o2.chapterNumber * 100).toInt()
-                chapterDifference // else returns the chapter difference
+                val volumeDifference = (o1.chapterVolume * 100).toInt() - (o2.chapterVolume * 100).toInt()
+                if (volumeDifference != 0) return@Comparator volumeDifference // returns the volume difference
+                // else returns the chapter difference
+                return@Comparator (o1.chapterNumber * 100).toInt() - (o2.chapterNumber * 100).toInt()
             }
         ).forEach {
             val url = "${baseUrl}read/${it.bookId}/${it.language}/${it.chapterId}"

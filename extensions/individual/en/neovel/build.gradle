@@ -3,7 +3,7 @@ apply plugin: 'kotlin-android'
 
 ext {
     extName = 'Neovel'
-    pkgNameSuffix = 'en.neovel'
+    pkgNameSuffix = ''
     extClass = '.Neovel'
     extVersionCode = 3
     libVersion = '1.0'

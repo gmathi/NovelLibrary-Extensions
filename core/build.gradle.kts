@@ -8,7 +8,7 @@ android {
     compileSdkVersion(Config.compileSdk)
 
     defaultConfig {
-        minSdkVersion(Config.minSdk)
+        minSdk = Config.minSdk
     }
 
     sourceSets {

@@ -12,6 +12,7 @@ import okhttp3.*
 import okhttp3.internal.EMPTY_REQUEST
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.json.JSONArray
 import java.net.URLEncoder
 
 class EmpireNovel : ParsedHttpSource() {
@@ -37,54 +38,138 @@ class EmpireNovel : ParsedHttpSource() {
     //region Search Novel
     override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "$baseUrl/?s=${encodedQuery.replace(" ", "+")}&post_type=wp-manga"
+        val url = "$baseUrl/search-live?q=$encodedQuery"
         return GET(url, headers)
     }
 
-    override fun searchNovelsFromElement(element: Element): Novel {
-        val titleElement = element.selectFirst("div.post-title a")
-        val novel = Novel(titleElement.text(), titleElement.attr("abs:href"), id)
-        novel.imageUrl = element.selectFirst("img[src]")?.attr("abs:src")
-        novel.authors = element.selectFirst("div.post-content_item.mg_author div.summary-content")?.children()?.map { it.text() }
-        novel.genres = element.selectFirst("div.post-content_item.mg_genres div.summary-content")?.children()?.map { it.text() }
-        novel.rating = element.selectFirst("span.score.font-meta.total_votes")?.text()
-        return novel
+    override fun searchNovelsParse(response: Response): List<Novel> {
+        val jsonArray = JSONArray(response.body!!.string())
+        val novels = mutableListOf<Novel>()
+        
+        for (i in 0 until jsonArray.length()) {
+            val item = jsonArray.getJSONObject(i)
+            val title = item.getString("title")
+            val slug = item.getString("slug")
+            val novelUrl = "$baseUrl/novel/$slug"
+            
+            val novel = Novel(title, novelUrl, id)
+            novel.imageUrl = item.optString("image", null)
+            novel.metadata["slug"] = slug
+            
+            novels.add(novel)
+        }
+        
+        return novels
     }
 
-    override fun searchNovelsSelector() = "div.c-tabs-item__content"
+    override fun searchNovelsFromElement(element: Element): Novel {
+        throw Exception(NOT_USED)
+    }
+
+    override fun searchNovelsSelector() = throw Exception(NOT_USED)
     override fun searchNovelsNextPageSelector() = "a:contains(Last)"
     //endregion
 
     //region Novel Details
     override fun novelDetailsParse(novel: Novel, document: Document): Novel {
-        novel.imageUrl = document.body().selectFirst("div.summary_image img[src]")?.attr("abs:src")
-        novel.longDescription = document.body().selectFirst("div.description-summary")?.text()
-        document.body().select("div.post-content_item")?.forEach {
-            val heading = it.select("div.summary-heading")?.first()?.text() ?: return@forEach
-            val value = it.select("div.summary-content")?.first()?.children()?.first()?.html()
-            novel.metadata[heading] = value
+        // Extract image from the book cover (try data-src first for lazy-loaded, then src)
+        val imageElement = document.selectFirst("img.show_image")
+        novel.imageUrl = imageElement?.attr("abs:data-src")?.takeIf { it.isNotEmpty() }
+            ?: imageElement?.attr("abs:src")
+            ?: document.selectFirst("div.book img")?.attr("abs:src")
+        
+        // Extract title
+        val title = document.selectFirst("h1[itemprop=name]")?.text()?.trim()
+        if (title != null) {
+            novel.name = title
         }
-        val externalId = document.body().select("input.rating-post-id[type=hidden]").attr("value")
-        novel.externalNovelId = externalId
-        novel.metadata["PostId"] = externalId
+        
+        // Extract description
+        val descriptionElement = document.selectFirst("dd[itemprop=description]")
+        if (descriptionElement != null) {
+            val fullDescription = descriptionElement.selectFirst("span#more")?.text()?.trim()
+                ?: descriptionElement.text().trim()
+            novel.longDescription = fullDescription
+        }
+        
+        // Extract metadata from show_details section
+        document.select("div.show_details div.d-flex").forEach {
+            val parts = it.text().split(Regex("\\s{2,}"))
+            if (parts.size >= 2) {
+                val key = parts[0].trim()
+                val value = parts.last().trim()
+                novel.metadata[key] = value
+                
+                // Set specific fields
+                when (key.lowercase()) {
+                    "status" -> novel.metadata["Status"] = value
+                    "author" -> {
+                        novel.authors = listOf(value)
+                        novel.metadata["Author"] = value
+                    }
+                }
+            }
+        }
+        
+        // Extract author from itemprop
+        val author = document.selectFirst("span[itemprop=author] a")?.text()?.trim()
+        if (author != null && novel.authors.isNullOrEmpty()) {
+            novel.authors = listOf(author)
+            novel.metadata["Author"] = author
+        }
+        
+        // Extract genres/categories
+        val genres = document.select("a.category[itemprop=genre]").map { it.text().trim() }
+        if (genres.isNotEmpty()) {
+            novel.genres = genres
+            novel.metadata["Genres"] = genres.joinToString(", ")
+        }
+        
         return novel
     }
     //endregion
 
     //region Chapters
     override fun chapterListRequest(novel: Novel): Request {
-        val url = "${novel.url}ajax/chapters/"
-        return POST(url, body = EMPTY_REQUEST)
+        return GET(novel.url, headers)
     }
     
-    override fun chapterListSelector() = "li.wp-manga-chapter a"
+    override fun chapterListSelector() = "a.chapter_link"
     
-    override fun chapterFromElement(element: Element) = WebPage(element.absUrl("href"), element.text())
+    override fun chapterFromElement(element: Element): WebPage {
+        val url = element.attr("abs:href")
+        val title = element.selectFirst("div.chapter")?.text()?.trim() ?: element.text().trim()
+        return WebPage(url, title)
+    }
     
     override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).reversed().mapIndexed { index, element ->
-            val chapter = chapterFromElement(element)
+        val allChapters = mutableListOf<WebPage>()
+        var currentPage = 1
+        var hasMoreChapters = true
+        
+        while (hasMoreChapters) {
+            val pageUrl = if (currentPage == 1) {
+                novel.url
+            } else {
+                "${novel.url}?page=$currentPage"
+            }
+            
+            val pageResponse = client.newCall(GET(pageUrl, headers)).execute()
+            val document = pageResponse.asJsoup()
+            val chapters = document.select(chapterListSelector())
+            
+            if (chapters.isEmpty()) {
+                hasMoreChapters = false
+            } else {
+                chapters.forEach { element ->
+                    allChapters.add(chapterFromElement(element))
+                }
+                currentPage++
+            }
+        }
+        
+        // Reverse to get correct order (oldest to newest) and set order IDs
+        return allChapters.reversed().mapIndexed { index, chapter ->
             chapter.orderId = index.toLong()
             chapter
         }

@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'PurrFiction'
+    pkgNameSuffix = ''
+    extClass = '.PurrFiction'
+    extVersionCode = 4
+    libVersion = '1.0'
+}
+
+android {
+    namespace = 'io.github.gmathi.novellibrary.extension.en.purrfiction'
+}
+
+apply from: "$rootDir/common.gradle"

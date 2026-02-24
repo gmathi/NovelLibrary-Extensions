@@ -94,3 +94,7 @@ extensions/individual/en/novelbuddy/debug/output-metadata.json
 
 # Kiro IDE
 .kiro/
+
+# Test results
+*-results.json
+*-test-results.json

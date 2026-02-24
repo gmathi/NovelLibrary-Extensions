@@ -91,3 +91,6 @@ lint/tmp/
 .idea/*
 release/
 extensions/individual/en/novelbuddy/debug/output-metadata.json
+
+# Kiro IDE
+.kiro/

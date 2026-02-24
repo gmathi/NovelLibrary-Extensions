@@ -1,8 +1,52 @@
-
 # NovelLibrary-Extensions
-Extensions for NovelLibrary
 
-# How to create extensions
+Extensions for NovelLibrary Android app.
+
+---
+
+## 📊 Current Status
+
+**Total Extensions:** 13
+- 🟢 Working: 5 (38%)
+- 🟡 Needs Fix: 3 (23%)
+- 🔴 Blocked/Down: 5 (38%)
+
+See [EXTENSIONS-STATUS.md](EXTENSIONS-STATUS.md) for detailed status of each extension.
+
+---
+
+## 📚 Documentation
+
+- **[EXTENSIONS-STATUS.md](EXTENSIONS-STATUS.md)** - Current status of all extensions with test results
+- **[TESTING-GUIDE.md](TESTING-GUIDE.md)** - Complete guide for testing extensions
+
+---
+
+## 🚀 Quick Start
+
+### Testing Extensions
+
+```bash
+# Test runtime functionality (search, details, chapters)
+python test-extension-runtime.py
+
+# Validate extension structure (files, manifests)
+pwsh validate-extension-structure.ps1
+```
+
+### Building Extensions
+
+```bash
+# Build all extensions
+./gradlew assembleRelease
+
+# Build specific extension
+./gradlew :extensions:individual:en:novelfull:assembleRelease
+```
+
+---
+
+## 🛠️ How to Create Extensions
 
 ## Prerequisites
 - Android Studio

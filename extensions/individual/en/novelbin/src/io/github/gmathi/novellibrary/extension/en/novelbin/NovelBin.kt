@@ -20,7 +20,7 @@ import java.net.URLEncoder
 class NovelBin : ParsedHttpSource() {
 
     override val baseUrl: String
-        get() = "https://novelbin.org"
+        get() = "https://novelbin.me"
     override val lang: String
         get() = "en"
     override val supportsLatest: Boolean

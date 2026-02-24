@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'EmpireNovel'
+    pkgNameSuffix = 'en.empirenovel'
+    extClass = '.EmpireNovel'
+    extVersionCode = 1
+    libVersion = '1.0'
+}
+
+android {
+    namespace = 'io.github.gmathi.novellibrary.extension.en.empirenovel'
+}
+
+apply from: "$rootDir/common.gradle"

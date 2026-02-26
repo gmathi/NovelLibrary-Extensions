@@ -39,7 +39,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.12.0'
 
-    compileOnly 'com.github.inorichi:injekt:v1.3.0'
+    compileOnly 'uy.kohesive.injekt:injekt-core:1.16.1'
 
     final okhttp_version = '5.0.0-alpha.2'
     compileOnly "com.squareup.okhttp3:okhttp:$okhttp_version"

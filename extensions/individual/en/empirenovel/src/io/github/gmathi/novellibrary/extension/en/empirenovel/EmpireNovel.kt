@@ -2,17 +2,16 @@ package io.github.gmathi.novellibrary.extension.en.empirenovel
 
 import io.github.gmathi.novellibrary.model.database.Novel
 import io.github.gmathi.novellibrary.model.database.WebPage
+import io.github.gmathi.novellibrary.model.other.NovelsPage
 import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
-import io.github.gmathi.novellibrary.network.POST
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
 import io.github.gmathi.novellibrary.util.network.asJsoup
 import okhttp3.*
-import okhttp3.internal.EMPTY_REQUEST
+import org.json.JSONArray
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.json.JSONArray
 import java.net.URLEncoder
 
 class EmpireNovel : ParsedHttpSource() {
@@ -42,24 +41,24 @@ class EmpireNovel : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchNovelsParse(response: Response): List<Novel> {
+    override fun searchNovelsParse(response: Response): NovelsPage {
         val jsonArray = JSONArray(response.body!!.string())
         val novels = mutableListOf<Novel>()
-        
+
         for (i in 0 until jsonArray.length()) {
             val item = jsonArray.getJSONObject(i)
             val title = item.getString("title")
             val slug = item.getString("slug")
             val novelUrl = "$baseUrl/novel/$slug"
-            
+
             val novel = Novel(title, novelUrl, id)
             novel.imageUrl = item.optString("image", null)
             novel.metadata["slug"] = slug
-            
+
             novels.add(novel)
         }
-        
-        return novels
+
+        return NovelsPage(novels, hasNextPage = false)
     }
 
     override fun searchNovelsFromElement(element: Element): Novel {
@@ -77,13 +76,13 @@ class EmpireNovel : ParsedHttpSource() {
         novel.imageUrl = imageElement?.attr("abs:data-src")?.takeIf { it.isNotEmpty() }
             ?: imageElement?.attr("abs:src")
             ?: document.selectFirst("div.book img")?.attr("abs:src")
-        
+
         // Extract title
         val title = document.selectFirst("h1[itemprop=name]")?.text()?.trim()
         if (title != null) {
             novel.name = title
         }
-        
+
         // Extract description
         val descriptionElement = document.selectFirst("dd[itemprop=description]")
         if (descriptionElement != null) {
@@ -91,7 +90,7 @@ class EmpireNovel : ParsedHttpSource() {
                 ?: descriptionElement.text().trim()
             novel.longDescription = fullDescription
         }
-        
+
         // Extract metadata from show_details section
         document.select("div.show_details div.d-flex").forEach {
             val parts = it.text().split(Regex("\\s{2,}"))
@@ -99,7 +98,7 @@ class EmpireNovel : ParsedHttpSource() {
                 val key = parts[0].trim()
                 val value = parts.last().trim()
                 novel.metadata[key] = value
-                
+
                 // Set specific fields
                 when (key.lowercase()) {
                     "status" -> novel.metadata["Status"] = value
@@ -110,21 +109,21 @@ class EmpireNovel : ParsedHttpSource() {
                 }
             }
         }
-        
+
         // Extract author from itemprop
         val author = document.selectFirst("span[itemprop=author] a")?.text()?.trim()
         if (author != null && novel.authors.isNullOrEmpty()) {
             novel.authors = listOf(author)
             novel.metadata["Author"] = author
         }
-        
+
         // Extract genres/categories
         val genres = document.select("a.category[itemprop=genre]").map { it.text().trim() }
         if (genres.isNotEmpty()) {
             novel.genres = genres
             novel.metadata["Genres"] = genres.joinToString(", ")
         }
-        
+
         return novel
     }
     //endregion
@@ -133,31 +132,31 @@ class EmpireNovel : ParsedHttpSource() {
     override fun chapterListRequest(novel: Novel): Request {
         return GET(novel.url, headers)
     }
-    
+
     override fun chapterListSelector() = "a.chapter_link"
-    
+
     override fun chapterFromElement(element: Element): WebPage {
         val url = element.attr("abs:href")
         val title = element.selectFirst("div.chapter")?.text()?.trim() ?: element.text().trim()
         return WebPage(url, title)
     }
-    
+
     override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
         val allChapters = mutableListOf<WebPage>()
         var currentPage = 1
         var hasMoreChapters = true
-        
+
         while (hasMoreChapters) {
             val pageUrl = if (currentPage == 1) {
                 novel.url
             } else {
                 "${novel.url}?page=$currentPage"
             }
-            
+
             val pageResponse = client.newCall(GET(pageUrl, headers)).execute()
             val document = pageResponse.asJsoup()
             val chapters = document.select(chapterListSelector())
-            
+
             if (chapters.isEmpty()) {
                 hasMoreChapters = false
             } else {
@@ -167,7 +166,7 @@ class EmpireNovel : ParsedHttpSource() {
                 currentPage++
             }
         }
-        
+
         // Reverse to get correct order (oldest to newest) and set order IDs
         return allChapters.reversed().mapIndexed { index, chapter ->
             chapter.orderId = index.toLong()

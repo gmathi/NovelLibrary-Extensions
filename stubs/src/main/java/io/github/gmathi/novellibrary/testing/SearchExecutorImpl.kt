@@ -22,38 +22,12 @@ class SearchExecutorImpl : SearchExecutor {
         val metadata = extractMetadata(extension)
         
         return try {
-            // Create search request with page=1, query, and empty FilterList
-            val request = extension.searchNovelsRequest(
+            // Use the public fetchSearchNovels API with RxJava Observable
+            val novelsPage = extension.fetchSearchNovels(
                 page = 1,
                 query = query,
                 filters = FilterList()
-            )
-            
-            // Configure OkHttpClient with timeout
-            val client = extension.client.newBuilder()
-                .connectTimeout(timeout, TimeUnit.MILLISECONDS)
-                .readTimeout(timeout, TimeUnit.MILLISECONDS)
-                .writeTimeout(timeout, TimeUnit.MILLISECONDS)
-                .build()
-            
-            // Execute HTTP request
-            val response = client.newCall(request).execute()
-            
-            // Check HTTP status code
-            if (!response.isSuccessful) {
-                val executionTime = System.currentTimeMillis() - startTime
-                return TestResult.Failure(
-                    extensionMetadata = metadata,
-                    query = query,
-                    executionTimeMs = executionTime,
-                    failureType = FailureType.HTTP_ERROR,
-                    message = "HTTP error: ${response.code} ${response.message}",
-                    exception = null
-                )
-            }
-            
-            // Parse response to get NovelsPage
-            val novelsPage = extension.searchNovelsParse(response)
+            ).toBlocking().first()
             
             val executionTime = System.currentTimeMillis() - startTime
             

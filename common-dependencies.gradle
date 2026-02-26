@@ -16,7 +16,7 @@ dependencies {
     compileOnly 'org.jsoup:jsoup:1.13.1'
     compileOnly 'com.google.code.gson:gson:2.10.1'
     compileOnly 'com.github.salomonbrys.kotson:kotson:2.5.0'
-    compileOnly 'com.github.inorichi:injekt:v1.3.0'
+    compileOnly 'uy.kohesive.injekt:injekt-core:1.16.1'
 
 //    implementation project(":annotations")
 //    compileOnly project(':duktape-stub')

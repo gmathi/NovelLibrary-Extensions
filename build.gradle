@@ -25,3 +25,6 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+// Apply consolidate builds script
+apply from: 'consolidate-builds.gradle'

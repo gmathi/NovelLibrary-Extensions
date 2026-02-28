@@ -1,0 +1,121 @@
+// Consolidate all extension builds into a single directory
+// Usage: ./gradlew consolidateBuilds
+
+task consolidateBuilds {
+    group = 'build'
+    description = 'Consolidates all extension APKs and icons into build/consolidated directory'
+    
+    doLast {
+        def consolidatedDir = file("${rootProject.buildDir}/consolidated")
+        def apkDir = file("${consolidatedDir}/apk")
+        def iconDir = file("${consolidatedDir}/icon")
+        
+        // Create directories
+        apkDir.mkdirs()
+        iconDir.mkdirs()
+        
+        println "Consolidating builds to: ${consolidatedDir.absolutePath}"
+        
+        def extensionCount = 0
+        def copiedCount = 0
+        
+        // Find all extension projects
+        rootProject.subprojects.each { project ->
+            if (project.path.startsWith(':extensions:individual:')) {
+                extensionCount++
+                
+                def buildDir = project.file('build/outputs/apk/release')
+                def resDir = project.file('res')
+                
+                // Find APK file
+                if (buildDir.exists()) {
+                    buildDir.listFiles().each { file ->
+                        if (file.name.endsWith('.apk')) {
+                            // Remove -release from APK filename
+                            def cleanApkName = file.name.replace('-release.apk', '.apk')
+                            def destApk = new File(apkDir, cleanApkName)
+                            copy {
+                                from file
+                                into apkDir
+                                rename { cleanApkName }
+                            }
+                            println "  ✓ Copied APK: ${cleanApkName}"
+                            
+                            // Extract package name from APK filename (remove -release.apk)
+                            def apkName = file.name.replace('-release.apk', '')
+                            
+                            // Find and copy icon (try multiple locations, PNG only)
+                            def iconCopied = false
+                            
+                            // Try foreground icons first (no padding), then regular launcher icons
+                            def iconLocations = [
+                                'mipmap-xxxhdpi/ic_launcher_foreground.png',
+                                'mipmap-xxhdpi/ic_launcher_foreground.png',
+                                'mipmap-xhdpi/ic_launcher_foreground.png',
+                                'mipmap-hdpi/ic_launcher_foreground.png',
+                                'mipmap-mdpi/ic_launcher_foreground.png',
+                                'mipmap-xxxhdpi/ic_launcher.png',
+                                'mipmap-xxhdpi/ic_launcher.png',
+                                'mipmap-xhdpi/ic_launcher.png',
+                                'mipmap-hdpi/ic_launcher.png',
+                                'mipmap-mdpi/ic_launcher.png'
+                            ]
+                            
+                            for (iconPath in iconLocations) {
+                                def iconFile = new File(resDir, iconPath)
+                                if (iconFile.exists()) {
+                                    def destIcon = new File(iconDir, "${apkName}.png")
+                                    copy {
+                                        from iconFile
+                                        into iconDir
+                                        rename { "${apkName}.png" }
+                                    }
+                                    println "  ✓ Copied icon: ${apkName}.png"
+                                    iconCopied = true
+                                    copiedCount++
+                                    break
+                                }
+                            }
+                            
+                            if (!iconCopied) {
+                                println "  ⚠ No icon found for: ${project.name}"
+                            }
+                        }
+                    }
+                } else {
+                    println "  ⚠ No build found for: ${project.name} (run assembleRelease first)"
+                }
+            }
+        }
+        
+        println "\n" + "=".multiply(60)
+        println "Consolidation complete!"
+        println "Extensions processed: ${extensionCount}"
+        println "APKs and icons copied: ${copiedCount}"
+        println "Output directory: ${consolidatedDir.absolutePath}"
+        println "=".multiply(60)
+    }
+}
+
+// Task to build all extensions and then consolidate
+task buildAndConsolidate {
+    group = 'build'
+    description = 'Builds all extensions and consolidates them into build/consolidated directory'
+    
+    doLast {
+        println "Building all extensions..."
+    }
+}
+
+// Make all extension assembleRelease tasks dependencies
+rootProject.subprojects.each { project ->
+    if (project.path.startsWith(':extensions:individual:') && project.path.count(':') == 4) {
+        project.afterEvaluate {
+            if (project.tasks.findByName('assembleRelease')) {
+                buildAndConsolidate.dependsOn project.tasks.assembleRelease
+            }
+        }
+    }
+}
+
+buildAndConsolidate.finalizedBy 'consolidateBuilds'

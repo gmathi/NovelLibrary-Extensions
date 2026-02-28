@@ -5,9 +5,25 @@ android {
     compileSdkVersion Config.compileSdk
     buildToolsVersion Config.buildTools
 
+    signingConfigs {
+        release {
+            def keystorePropertiesFile = rootProject.file("keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                def keystoreProperties = new Properties()
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+                
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            } 
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
         }
     }
 
@@ -28,7 +44,6 @@ android {
     defaultConfig {
         minSdkVersion Config.minSdk
         targetSdkVersion Config.targetSdk
-        applicationIdSuffix pkgNameSuffix
         versionCode extVersionCode
         versionName "$libVersion.$extVersionCode"
         setProperty("archivesBaseName", "novellibrary-$pkgNameSuffix-v$versionName")

@@ -3,9 +3,9 @@ apply plugin: 'kotlin-android'
 
 ext {
     extName = 'EmpireNovel'
-    pkgNameSuffix = ''
+    pkgNameSuffix = 'en.empirenovel'
     extClass = '.EmpireNovel'
-    extVersionCode = 1
+    extVersionCode = 2
     libVersion = '1.0'
 }
 

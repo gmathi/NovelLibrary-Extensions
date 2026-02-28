@@ -3,7 +3,7 @@ apply plugin: 'kotlin-android'
 
 ext {
     extName = 'PurrFiction'
-    pkgNameSuffix = ''
+    pkgNameSuffix = 'en.purrfiction'
     extClass = '.PurrFiction'
     extVersionCode = 4
     libVersion = '1.0'

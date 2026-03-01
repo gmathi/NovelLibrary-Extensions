@@ -24,5 +24,6 @@ dependencies {
 }
 
 kotlinter {
-    disabledRules = ["no-wildcard-imports"]
+    ignoreFailures = false
+    reporters = ['checkstyle', 'plain']
 }

@@ -135,7 +135,7 @@ class NovelFull : ParsedHttpSource() {
 //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
     }
 }

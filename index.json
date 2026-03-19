@@ -2,10 +2,10 @@
   {
     "name": "NovelLibrary: RoyalRoad",
     "pkg": "io.github.gmathi.novellibrary.extension.en.royalroad",
-    "apk": "novellibrary-en.royalroad-v1.0.3.apk",
+    "apk": "novellibrary-en.royalroad-v1.0.4.apk",
     "lang": "en",
-    "code": 3,
-    "version": "1.0.3",
+    "code": 4,
+    "version": "1.0.4",
     "nsfw": 0
   },
   {
@@ -47,10 +47,10 @@
   {
     "name": "NovelLibrary: NovelBuddy",
     "pkg": "io.github.gmathi.novellibrary.extension.en.novelbuddy",
-    "apk": "novellibrary-en.novelbuddy-v1.0.1.apk",
+    "apk": "novellibrary-en.novelbuddy-v1.0.2.apk",
     "lang": "en",
-    "code": 1,
-    "version": "1.0.1",
+    "code": 2,
+    "version": "1.0.2",
     "nsfw": 0
   }
 ]

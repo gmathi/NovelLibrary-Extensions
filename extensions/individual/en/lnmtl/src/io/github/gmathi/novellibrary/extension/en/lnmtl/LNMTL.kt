@@ -14,14 +14,15 @@ import io.github.gmathi.novellibrary.util.Exceptions
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
 import io.github.gmathi.novellibrary.util.network.asJsoup
 import io.github.gmathi.novellibrary.util.network.safeExecute
-import okhttp3.*
+import okhttp3.Headers
+import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.URLEncoder
 
 class LNMTL : ParsedHttpSource() {
-
     override val id: Long
         get() = 4L
     override val baseUrl: String
@@ -35,19 +36,22 @@ class LNMTL : ParsedHttpSource() {
 
     var shouldFetchNovels = true
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", USER_AGENT)
+            .add("Referer", baseUrl)
 
     //region Search Novel
 
     override fun fetchSearchNovels(
         page: Int,
         query: String,
-        filters: FilterList
+        filters: FilterList,
     ): Observable<NovelsPage> {
-        if (shouldFetchNovels)
+        if (shouldFetchNovels) {
             getNovelsLNMTL()
+        }
 
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val searchResults =
@@ -59,39 +63,63 @@ class LNMTL : ParsedHttpSource() {
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, response: Response): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        response: Response,
+    ): Novel {
         val doc = response.asJsoup()
         val novelElement = doc.selectFirst(".novel .media")
         novel.imageUrl = novelElement.selectFirst("img[src]")?.attr("abs:src")
         novel.longDescription = novelElement.selectFirst(".description")?.text()
 
         val negative =
-            novelElement.selectFirst("div.progress-bar-danger")?.text()?.split(" ")?.get(0)?.toInt()
+            novelElement
+                .selectFirst("div.progress-bar-danger")
+                ?.text()
+                ?.split(" ")
+                ?.get(0)
+                ?.toInt()
                 ?: 0
         val neutral =
-            novelElement.selectFirst("div.progress-bar-warning")?.text()?.split(" ")?.get(0)
+            novelElement
+                .selectFirst("div.progress-bar-warning")
+                ?.text()
+                ?.split(" ")
+                ?.get(0)
                 ?.toInt() ?: 0
         val positive =
-            novelElement.selectFirst("div.progress-bar-success")?.text()?.split(" ")?.get(0)
+            novelElement
+                .selectFirst("div.progress-bar-success")
+                ?.text()
+                ?.split(" ")
+                ?.get(0)
                 ?.toInt() ?: 0
         val total = (negative + neutral + positive).toFloat()
-        if (total != 0f)
+        if (total != 0f) {
             novel.rating = (positive / total * 5).toString()
+        }
 
         val detailsElement = doc.selectFirst("div.container .row > div:last-child")
 
-        val authors = detailsElement?.selectFirst("dt:contains(Authors)")?.nextElementSibling()
-            ?.select("span")
+        val authors =
+            detailsElement
+                ?.selectFirst("dt:contains(Authors)")
+                ?.nextElementSibling()
+                ?.select("span")
         novel.metadata["Author(s)"] = authors?.joinToString(", ") { it.text() }
 
         val genres =
-            detailsElement?.selectFirst("div.panel-heading:contains(Genres)")?.nextElementSibling()
+            detailsElement
+                ?.selectFirst("div.panel-heading:contains(Genres)")
+                ?.nextElementSibling()
                 ?.select("ul li")
         novel.genres = genres?.map { it.text() }
         novel.metadata["Genre(s)"] = genres?.joinToString(", ") { it.html() }
 
         val tags =
-            detailsElement?.selectFirst("div.panel-heading:contains(Tags)")?.nextElementSibling()
+            detailsElement
+                ?.selectFirst("div.panel-heading:contains(Tags)")
+                ?.nextElementSibling()
                 ?.select("ul li")
         novel.metadata["Tags"] = tags?.joinToString(", ") { it.html() }
 
@@ -99,26 +127,33 @@ class LNMTL : ParsedHttpSource() {
     }
 
     //endregion
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
         val chapters = ArrayList<WebPage>()
         val doc = response.asJsoup()
         val scripts = doc.select("script")
         val script =
             scripts.find { it.html().contains("lnmtl.firstResponse =") } ?: throw Exception(
-                Exceptions.PARSING_ERROR
+                Exceptions.PARSING_ERROR,
             )
         val text = script.html().split(";")
 
         // It can be hardcoded to be `https://lnmtl.com/chapter`, but I decided to parse it just in case.
-        val route = text.find { it.startsWith("lnmtl.route =") }?.trim()?.substring(15)
-            ?.substringBeforeLast('\'') ?: "https://lnmtl.com/chapter"
+        val route =
+            text
+                .find { it.startsWith("lnmtl.route =") }
+                ?.trim()
+                ?.substring(15)
+                ?.substringBeforeLast('\'') ?: "https://lnmtl.com/chapter"
         val volumeJson = text.find { it.startsWith("lnmtl.volumes =") }?.substring(15)
 
         val type = object : TypeToken<Map<String, Any>>() {}.type
         val volumeType = object : TypeToken<List<Map<String, Any>>>() {}.type
         val volumeGson: List<LinkedTreeMap<String, Any>> =
             Gson().fromJson(volumeJson, volumeType) ?: throw Exception(
-                Exceptions.PARSING_ERROR
+                Exceptions.PARSING_ERROR,
             )
 
         // Potential optimization is to skip fetching first page of first volume,
@@ -129,7 +164,12 @@ class LNMTL : ParsedHttpSource() {
             var page = 1
             do {
                 val request = GET("$route?page=${page++}&volumeId=$id")
-                val pageResponse = client.newCall(request).execute().body?.string() ?: "{}"
+                val pageResponse =
+                    client
+                        .newCall(request)
+                        .execute()
+                        .body
+                        ?.string() ?: "{}"
                 val pageGson: LinkedTreeMap<String, Any> =
                     Gson().fromJson(pageResponse, type) ?: break
 
@@ -157,8 +197,9 @@ class LNMTL : ParsedHttpSource() {
     @Synchronized
     private fun getNovelsLNMTL() {
         try {
-            if (novelsLNMTL != null)
+            if (novelsLNMTL != null) {
                 return
+            }
 
             if (!network.isConnectedToNetwork()) {
                 this.shouldFetchNovels = true
@@ -180,17 +221,20 @@ class LNMTL : ParsedHttpSource() {
             // "{some javascript} local: [ {json} ] {some javascript}"
             // we need to extract the pure json
             // to do so, take the substring between "local: [" and "]"
-            val json = text.substring(text.indexOf("local:") + 7)
-                .substringBefore(']') + ']'
+            val json =
+                text
+                    .substring(text.indexOf("local:") + 7)
+                    .substringBefore(']') + ']'
 
             novelsLNMTL = ArrayList()
             val novels: List<LNMTLNovelJson> =
                 Gson().fromJson(json, Array<LNMTLNovelJson>::class.java).toList()
-            val mappedNovels = novels.map {
-                val novel = Novel(it.name, it.url, id)
-                novel.imageUrl = it.image
-                novel
-            }
+            val mappedNovels =
+                novels.map {
+                    val novel = Novel(it.name, it.url, id)
+                    novel.imageUrl = it.image
+                    novel
+                }
             novelsLNMTL = ArrayList(mappedNovels)
         } catch (e: Exception) {
             throw e
@@ -203,7 +247,11 @@ class LNMTL : ParsedHttpSource() {
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(NOT_USED)
 
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request = throw Exception(NOT_USED)
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw Exception(NOT_USED)
 
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(NOT_USED)
 
@@ -225,7 +273,10 @@ class LNMTL : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String = throw Exception(NOT_USED)
 
-    override fun novelDetailsParse(novel: Novel, document: Document): Novel = throw Exception(NOT_USED)
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel = throw Exception(NOT_USED)
 
     override fun chapterListSelector(): String = throw Exception(NOT_USED)
 
@@ -234,8 +285,9 @@ class LNMTL : ParsedHttpSource() {
     //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 10; K) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
 
         // Below is to cache Neovel Genres & Tags
         private var novelsLNMTL: ArrayList<Novel>? = null
@@ -250,6 +302,6 @@ class LNMTL : ParsedHttpSource() {
         @SerializedName("name_spelling") val name_spelling: String,
         @SerializedName("name_spelling_clean") val name_spelling_clean: String,
         @SerializedName("image") val image: String,
-        @SerializedName("url") val url: String
+        @SerializedName("url") val url: String,
     )
 }

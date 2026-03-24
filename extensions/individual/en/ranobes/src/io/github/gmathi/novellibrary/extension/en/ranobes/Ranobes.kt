@@ -12,12 +12,15 @@ import io.github.gmathi.novellibrary.util.Exceptions.MISSING_EXTERNAL_ID
 import io.github.gmathi.novellibrary.util.Exceptions.MISSING_IMPLEMENTATION
 import io.github.gmathi.novellibrary.util.lang.asJsonNullFree
 import io.github.gmathi.novellibrary.util.lang.asJsonNullFreeString
-import okhttp3.*
+import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class Ranobes : ParsedHttpSource() {
-
     override val baseUrl: String
         get() = "https://ranobes.net"
     override val lang: String
@@ -30,20 +33,28 @@ class Ranobes : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", DEFAULT_USER_AGENT)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/index.php?do=search"
-        val requestBody = FormBody.Builder()
-            .add("do", "search")
-            .add("subaction", "search")
-            .add("search_start", "$page")
-            .add("full_search", "0")
-            .add("result_from", "${((page - 1) * 10) + 1}")
-            .add("story", query)
+        val requestBody =
+            FormBody
+                .Builder()
+                .add("do", "search")
+                .add("subaction", "search")
+                .add("search_start", "$page")
+                .add("full_search", "0")
+                .add("result_from", "${((page - 1) * 10) + 1}")
+                .add("story", query)
         return POST(url, headers)
     }
 
@@ -60,10 +71,14 @@ class Ranobes : ParsedHttpSource() {
     }
 
     override fun searchNovelsSelector() = "div.block.story.shortstory.mod-poster"
+
     override fun searchNovelsNextPageSelector() = "a#nextlink"
     //endregion
 
-    override fun novelDetailsParse(novel: Novel, document: Document): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel {
         val body = document.body()
         novel.longDescription = body.select("[itemprop=description]").first().text()
 
@@ -72,7 +87,12 @@ class Ranobes : ParsedHttpSource() {
         novel.authors = authors
 
         novel.imageUrl = document.head().selectFirst("meta[property=\"og:image\"]").attr("content")
-        novel.genres = document.head().selectFirst("meta[name=keywords]").attr("content").split(", ")
+        novel.genres =
+            document
+                .head()
+                .selectFirst("meta[name=keywords]")
+                .attr("content")
+                .split(", ")
 
         return novel
     }
@@ -82,6 +102,7 @@ class Ranobes : ParsedHttpSource() {
     //region Chapters
 
     override fun chapterListSelector() = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun chapterFromElement(element: Element) = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun chapterListRequest(novel: Novel): Request {
@@ -90,7 +111,10 @@ class Ranobes : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
         val chapters = ArrayList<WebPage>()
         val id = novel.externalNovelId ?: throw Exception(MISSING_EXTERNAL_ID)
         val jsonString = response.body?.string() ?: throw Exception(Exceptions.NETWORK_ERROR)
@@ -118,16 +142,18 @@ class Ranobes : ParsedHttpSource() {
     //region stubs
 
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun latestUpdatesSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun latestUpdatesFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun latestUpdatesNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun popularNovelsSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun popularNovelsFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun popularNovelsFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 

@@ -56,7 +56,8 @@ class RoyalRoad : ParsedHttpSource() {
         novel.rating = element.selectFirst("span.star[title]")?.attr("title")
 
         // Description
-        novel.longDescription = element.selectFirst("div.fiction-description")?.text() ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
+        novel.longDescription =
+            element.selectFirst("div.fiction-description")?.text() ?: element.selectFirst("div.margin-top-10.col-xs-12")?.text()
         novel.shortDescription = novel.longDescription?.split("\n")?.firstOrNull()
 
         // Parse genre tags
@@ -171,7 +172,12 @@ class RoyalRoad : ParsedHttpSource() {
             val items = rightStats.select("li")
             var i = 0
             while (i < items.size - 1) {
-                val key = items[i].text().replace(":", "").trim().uppercase()
+                val key =
+                    items[i]
+                        .text()
+                        .replace(":", "")
+                        .trim()
+                        .uppercase()
                 val value = items[i + 1].text().trim()
                 when {
                     key.contains("TOTAL VIEWS") -> novel.metadata["TotalViews"] = value
@@ -226,6 +232,7 @@ class RoyalRoad : ParsedHttpSource() {
 //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) " + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 10; K) " + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
     }
 }

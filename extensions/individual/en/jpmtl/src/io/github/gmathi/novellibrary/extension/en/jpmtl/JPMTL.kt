@@ -20,7 +20,6 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 class JPMTL : ParsedHttpSource() {
-
     override val baseUrl: String
         get() = "https://jpmtl.com"
     override val lang: String
@@ -30,14 +29,23 @@ class JPMTL : ParsedHttpSource() {
     override val name: String
         get() = "JPMTL"
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", DEFAULT_USER_AGENT)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "$baseUrl/v2/book/show/browse?query=$encodedQuery&categories=&content_type=0&direction=0&page=$page&limit=25&type=5&status=all&language=3&exclude_categories="
+        val url =
+            "$baseUrl/v2/book/show/browse?query=$encodedQuery" +
+                "&categories=&content_type=0&direction=0&page=$page" +
+                "&limit=25&type=5&status=all&language=3&exclude_categories="
         return GET(url, headers)
     }
 
@@ -64,13 +72,22 @@ class JPMTL : ParsedHttpSource() {
     }
 
     override fun searchNovelsFromElement(element: Element) = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun searchNovelsSelector() = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun searchNovelsNextPageSelector() = throw Exception(MISSING_IMPLEMENTATION)
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, document: Document) = throw Exception(MISSING_IMPLEMENTATION)
-    override fun novelDetailsParse(novel: Novel, response: Response): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ) = throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun novelDetailsParse(
+        novel: Novel,
+        response: Response,
+    ): Novel {
         val jsonString = response.body?.string() ?: throw Exception(Exceptions.NETWORK_ERROR)
         val json = JsonParser.parseString(jsonString).asJsonObject
         json["author"]?.asJsonNullFreeString?.let { novel.authors = listOf(it) }
@@ -83,7 +100,10 @@ class JPMTL : ParsedHttpSource() {
         json["updated_at"]?.asJsonNullFreeString?.let { novel.metadata["updated_at"] = it }
         json["content_warnings"]?.asJsonNullFreeString?.let { novel.metadata["content_warnings"] = it }
         json["type"]?.asJsonNullFreeString?.let { novel.metadata["type"] = it }
-        json["alias"]?.asJsonNullFree?.asJsonArray?.joinToString { it.asJsonObject.get("name").asString }?.let { novel.metadata["status"] = it }
+        json["alias"]?.asJsonNullFree?.asJsonArray?.joinToString { it.asJsonObject.get("name").asString }?.let {
+            novel.metadata["status"] =
+                it
+        }
         json["raw_link"]?.asJsonNullFreeString?.let { novel.metadata["raw_link"] = it }
         json["content_type"]?.asJsonNullFreeString?.let { novel.metadata["content_type"] = it }
         json["language"]?.asJsonNullFreeString?.let { novel.metadata["language"] = it }
@@ -105,6 +125,7 @@ class JPMTL : ParsedHttpSource() {
     //region Chapters
 
     override fun chapterListSelector() = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun chapterFromElement(element: Element) = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun chapterListRequest(novel: Novel): Request {
@@ -113,7 +134,10 @@ class JPMTL : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
         val chapters = ArrayList<WebPage>()
         val id = novel.externalNovelId ?: throw Exception(MISSING_EXTERNAL_ID)
         val jsonString = response.body?.string() ?: throw Exception(Exceptions.NETWORK_ERROR)
@@ -141,16 +165,18 @@ class JPMTL : ParsedHttpSource() {
     //region stubs
 
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun latestUpdatesSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun latestUpdatesFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun latestUpdatesNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun popularNovelsSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun popularNovelsFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun popularNovelsFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 

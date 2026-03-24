@@ -8,14 +8,16 @@ import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
 import io.github.gmathi.novellibrary.util.network.asJsoup
-import okhttp3.*
+import okhttp3.Headers
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONArray
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 class EmpireNovel : ParsedHttpSource() {
-
     override val id: Long
         get() = 13L
     override val baseUrl: String
@@ -30,12 +32,18 @@ class EmpireNovel : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", USER_AGENT)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val url = "$baseUrl/search-live?q=$encodedQuery"
         return GET(url, headers)
@@ -47,13 +55,23 @@ class EmpireNovel : ParsedHttpSource() {
 
         for (i in 0 until jsonArray.length()) {
             val item = jsonArray.getJSONObject(i)
-            val title = item.getString("title")
+            val title = item.getString("name")
             val slug = item.getString("slug")
             val novelUrl = "$baseUrl/novel/$slug"
 
             val novel = Novel(title, novelUrl, id)
-            novel.imageUrl = item.optString("image", null)
+            // Build cover URL from slug if cover flag is set
+            if (item.optInt("cover", 0) == 1) {
+                // www.empirenovel.com/uploads/novel/gods-impact-online/cover/cover_250x350.jpg
+                novel.imageUrl = "$baseUrl/uploads/novel/$slug/cover/cover_250x350.jpg"
+            }
             novel.metadata["slug"] = slug
+
+            // Extract summary from nested object
+            val summaryObj = item.optJSONObject("summary")
+            if (summaryObj != null) {
+                novel.longDescription = summaryObj.optString("en", null)
+            }
 
             novels.add(novel)
         }
@@ -61,16 +79,18 @@ class EmpireNovel : ParsedHttpSource() {
         return NovelsPage(novels, hasNextPage = false)
     }
 
-    override fun searchNovelsFromElement(element: Element): Novel {
-        throw Exception(NOT_USED)
-    }
+    override fun searchNovelsFromElement(element: Element): Novel = throw Exception(NOT_USED)
 
     override fun searchNovelsSelector() = throw Exception(NOT_USED)
+
     override fun searchNovelsNextPageSelector() = "a:contains(Last)"
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, document: Document): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel {
         // Extract image from the book cover (try data-src first for lazy-loaded, then src)
         val imageElement = document.selectFirst("img.show_image")
         novel.imageUrl = imageElement?.attr("abs:data-src")?.takeIf { it.isNotEmpty() }
@@ -86,8 +106,9 @@ class EmpireNovel : ParsedHttpSource() {
         // Extract description
         val descriptionElement = document.selectFirst("dd[itemprop=description]")
         if (descriptionElement != null) {
-            val fullDescription = descriptionElement.selectFirst("span#more")?.text()?.trim()
-                ?: descriptionElement.text().trim()
+            val fullDescription =
+                descriptionElement.selectFirst("span#more")?.text()?.trim()
+                    ?: descriptionElement.text().trim()
             novel.longDescription = fullDescription
         }
 
@@ -129,9 +150,7 @@ class EmpireNovel : ParsedHttpSource() {
     //endregion
 
     //region Chapters
-    override fun chapterListRequest(novel: Novel): Request {
-        return GET(novel.url, headers)
-    }
+    override fun chapterListRequest(novel: Novel): Request = GET(novel.url, headers)
 
     override fun chapterListSelector() = "a.chapter_link"
 
@@ -141,17 +160,21 @@ class EmpireNovel : ParsedHttpSource() {
         return WebPage(url, title)
     }
 
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
         val allChapters = mutableListOf<WebPage>()
         var currentPage = 1
         var hasMoreChapters = true
 
         while (hasMoreChapters) {
-            val pageUrl = if (currentPage == 1) {
-                novel.url
-            } else {
-                "${novel.url}?page=$currentPage"
-            }
+            val pageUrl =
+                if (currentPage == 1) {
+                    novel.url
+                } else {
+                    "${novel.url}?page=$currentPage"
+                }
 
             val pageResponse = client.newCall(GET(pageUrl, headers)).execute()
             val document = pageResponse.asJsoup()
@@ -177,18 +200,25 @@ class EmpireNovel : ParsedHttpSource() {
 
     //region stubs
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(NOT_USED)
+
     override fun latestUpdatesSelector(): String = throw Exception(NOT_USED)
+
     override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
     override fun latestUpdatesNextPageSelector(): String = throw Exception(NOT_USED)
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(NOT_USED)
+
     override fun popularNovelsSelector(): String = throw Exception(NOT_USED)
+
     override fun popularNovelsFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
     override fun popularNovelNextPageSelector(): String = throw Exception(NOT_USED)
     //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 10; K) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
     }
 }

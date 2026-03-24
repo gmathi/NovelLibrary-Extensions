@@ -17,7 +17,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class WuxiaWorldSite : ParsedHttpSource() {
-
     override val baseUrl: String
         get() = "https://wuxiaworldsite.co"
     override val lang: String
@@ -30,12 +29,18 @@ class WuxiaWorldSite : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", USER_AGENT)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val reformattedQuery = query.replace(Regex("[^a-zA-Z0-9]"), "-")
         val url = "$baseUrl/search/$reformattedQuery&page=$page"
         return GET(url, headers)
@@ -43,45 +48,63 @@ class WuxiaWorldSite : ParsedHttpSource() {
 
     override fun searchNovelsParse(response: Response): NovelsPage {
         val document = response.asJsoup()
-        val novels = document.select(searchNovelsSelector())?.map { element ->
-            searchNovelsFromElement(element)
-        }
+        val novels =
+            document.select(searchNovelsSelector())?.map { element ->
+                searchNovelsFromElement(element)
+            }
 
         val hasNextPage =
-            document.select("li.next").firstOrNull() != null && document.select("li.next.disabled")
-                .firstOrNull() == null
+            document.select("li.next").firstOrNull() != null &&
+                document
+                    .select("li.next.disabled")
+                    .firstOrNull() == null
 
         return NovelsPage(novels ?: emptyList(), hasNextPage)
     }
 
     override fun searchNovelsFromElement(element: Element): Novel {
         val aElement = element.selectFirst("a[href]")
-        val novel = Novel(
-            aElement.text(),
-            aElement.attr("abs:href"),
-            this.id
-        )
+        val novel =
+            Novel(
+                aElement.text(),
+                aElement.attr("abs:href"),
+                this.id,
+            )
         novel.imageUrl = aElement.selectFirst("img").attr("abs:src")
         return novel
     }
 
     override fun searchNovelsSelector() = "div.bz.item"
+
     override fun searchNovelsNextPageSelector() = "span:contains(>|)"
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, document: Document): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel {
         val booksElement = document.body().selectFirst("div.read-book")
         val genres = booksElement.select("div.tags a.a_tag_item")
-        val infoElements = document.body().select("div.info").first().children()
+        val infoElements =
+            document
+                .body()
+                .select("div.info")
+                .first()
+                .children()
 
         novel.imageUrl = booksElement.selectFirst("div.img-read img").attr("abs:src")
         novel.genres = genres.map { it.text() }
 
         novel.longDescription = booksElement.select("div.story-introduction-content p").joinToString(separator = "\n") { it.text() }
-        novel.rating = (
-            document.body().select("div.small > em > strong > span").first().text()
-                .toDouble() / 2
+        novel.rating =
+            (
+                document
+                    .body()
+                    .select("div.small > em > strong > span")
+                    .first()
+                    .text()
+                    .toDouble() / 2
             ).toString()
         novel.externalNovelId = document.selectFirst("#rating")?.attr("data-novel-id")
 
@@ -97,6 +120,7 @@ class WuxiaWorldSite : ParsedHttpSource() {
     //region Chapters
 
     override fun chapterListSelector() = "select.chapter_jump option"
+
     override fun chapterFromElement(element: Element): WebPage {
         val url = "$baseUrl${element.attr("value")}"
         val name = element.text()
@@ -114,23 +138,26 @@ class WuxiaWorldSite : ParsedHttpSource() {
     //region stubs
 
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun latestUpdatesSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun latestUpdatesFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun latestUpdatesNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun popularNovelsSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun popularNovelsFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun popularNovelsFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
 //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 10; K) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
     }
 }

@@ -34,7 +34,7 @@ class PurrFiction : HttpSource() {
     override fun headersBuilder(): Headers.Builder =
         Headers
             .Builder()
-            .add("User-Agent", USER_AGENT)
+            .add("User-Agent", defaultUserAgent)
             .add("Referer", baseUrl)
 
     //region Search Novel
@@ -226,10 +226,6 @@ class PurrFiction : HttpSource() {
     //endregion
 
     companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 10; K) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
-
         // Below is to cache PurrFiction Genres & Tags
         private var purrfictionGenres: HashMap<Int, String>? = null
         private var purrfictionTags: HashMap<Int, String>? = null

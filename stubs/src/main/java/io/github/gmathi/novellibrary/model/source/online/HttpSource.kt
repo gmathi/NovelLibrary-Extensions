@@ -248,6 +248,13 @@ abstract class HttpSource : CatalogueSource {
         throw Exception("Stub!")
     }
 
+    /**
+     * Default user-agent string used for HTTP requests. Extensions can reference this
+     * directly instead of defining their own constant.
+     */
+    open val defaultUserAgent: String
+        get() = DEFAULT_USER_AGENT
+
     companion object {
         const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
     }

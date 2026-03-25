@@ -28,7 +28,7 @@ class RoyalRoad : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder().add("User-Agent", USER_AGENT).add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers.Builder().add("User-Agent", defaultUserAgent).add("Referer", baseUrl)
 
     //region Search Novel
     override fun searchNovelsRequest(
@@ -231,8 +231,4 @@ class RoyalRoad : ParsedHttpSource() {
 
 //endregion
 
-    companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 10; K) " + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
-    }
 }

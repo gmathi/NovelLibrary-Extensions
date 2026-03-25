@@ -36,7 +36,7 @@ class Ranobes : ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder =
         Headers
             .Builder()
-            .add("User-Agent", DEFAULT_USER_AGENT)
+            .add("User-Agent", defaultUserAgent)
             .add("Referer", baseUrl)
 
     //region Search Novel

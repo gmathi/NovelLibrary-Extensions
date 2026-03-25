@@ -34,7 +34,7 @@ class EmpireNovel : ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder =
         Headers
             .Builder()
-            .add("User-Agent", USER_AGENT)
+            .add("User-Agent", defaultUserAgent)
             .add("Referer", baseUrl)
 
     //region Search Novel
@@ -227,9 +227,6 @@ class EmpireNovel : ParsedHttpSource() {
     //endregion
 
     companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 10; K) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
 
         // Novel details regex patterns
         private val RE_IMAGE = Regex("""img\s+[^>]*class="show_image[^"]*"[^>]*data-src="([^"]+)"""")

@@ -7,7 +7,6 @@ import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
-import io.github.gmathi.novellibrary.util.network.asJsoup
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -87,68 +86,72 @@ class EmpireNovel : ParsedHttpSource() {
     //endregion
 
     //region Novel Details
+
+    /** Fast path: parse raw HTML string with regex, skip Jsoup entirely. */
     override fun novelDetailsParse(
         novel: Novel,
-        document: Document,
+        response: Response,
     ): Novel {
-        // Extract image from the book cover (try data-src first for lazy-loaded, then src)
-        val imageElement = document.selectFirst("img.show_image")
-        novel.imageUrl = imageElement?.attr("abs:data-src")?.takeIf { it.isNotEmpty() }
-            ?: imageElement?.attr("abs:src")
-            ?: document.selectFirst("div.book img")?.attr("abs:src")
+        val html = response.body!!.string()
 
-        // Extract title — itemprop is "name headline" (space-separated), so use ~= for word match
-        val title = document.selectFirst("h1[itemprop~=name]")?.text()?.trim()
-        if (title != null) {
-            novel.name = title
+        // Image — data-src on img.show_image
+        RE_IMAGE.find(html)?.groupValues?.get(1)?.let { src ->
+            novel.imageUrl = if (src.startsWith("http")) src else "$baseUrl$src"
         }
 
-        // Extract description
-        val descriptionElement = document.selectFirst("dd[itemprop=description]")
-        if (descriptionElement != null) {
-            val fullDescription =
-                descriptionElement.selectFirst("span#more")?.text()?.trim()
-                    ?: descriptionElement.text().trim()
-            novel.longDescription = fullDescription
-        }
+        // Title — first <h1> with itemprop containing "name"
+        RE_TITLE
+            .find(html)
+            ?.groupValues
+            ?.get(1)
+            ?.let { novel.name = decodeHtml(it).trim() }
 
-        // Extract metadata from show_details section
-        document.select("div.show_details div.d-flex").forEach {
-            val label = it.ownText().trim()
-            val value =
-                it.selectFirst("span")?.text()?.trim() ?: it
-                    .children()
-                    .last()
-                    ?.text()
-                    ?.trim() ?: return@forEach
-            if (label.isNotEmpty() && value.isNotEmpty()) {
-                novel.metadata[label] = value
-                when (label.lowercase()) {
-                    "status" -> novel.metadata["Status"] = value
-                    "author" -> {
-                        novel.authors = listOf(value)
-                        novel.metadata["Author"] = value
-                    }
+        // Description — content inside <span id="more">...</span>, fall back to dd[itemprop=description]
+        novel.longDescription = RE_DESC_MORE
+            .find(html)
+            ?.groupValues
+            ?.get(1)
+            ?.let { decodeHtml(it).trim() }
+            ?: RE_DESC_DD
+                .find(html)
+                ?.groupValues
+                ?.get(1)
+                ?.let { decodeHtml(it.replace(RE_HTML_TAG, "")).trim() }
+
+        // Status & Author from show_details div.d-flex pairs
+        RE_DETAIL_PAIR.findAll(html).forEach { match ->
+            val label = match.groupValues[1].trim().lowercase()
+            val value = decodeHtml(match.groupValues[2]).trim()
+            when (label) {
+                "status" -> novel.metadata["Status"] = value
+                "author" -> {
+                    novel.authors = listOf(value)
+                    novel.metadata["Author"] = value
                 }
             }
         }
 
-        // Extract author from itemprop
-        val author = document.selectFirst("span[itemprop=author] a")?.text()?.trim()
-        if (author != null && novel.authors.isNullOrEmpty()) {
-            novel.authors = listOf(author)
-            novel.metadata["Author"] = author
+        // Author fallback from itemprop=author
+        if (novel.authors.isNullOrEmpty()) {
+            RE_AUTHOR.find(html)?.groupValues?.get(1)?.let {
+                val author = decodeHtml(it).trim()
+                novel.authors = listOf(author)
+                novel.metadata["Author"] = author
+            }
         }
 
-        // Extract genres/categories
-        val genres = document.select("a.category[itemprop=genre]").map { it.text().trim() }
-        if (genres.isNotEmpty()) {
-            novel.genres = genres
-            novel.metadata["Genres"] = genres.joinToString(", ")
-        }
+        // Genres from itemprop="genre"
+        val genres = RE_GENRE.findAll(html).map { decodeHtml(it.groupValues[1]).trim() }.toList()
+        if (genres.isNotEmpty()) novel.genres = genres
 
         return novel
     }
+
+    /** Not used — we override the Response version directly. */
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel = novel
     //endregion
 
     //region Chapters
@@ -156,55 +159,51 @@ class EmpireNovel : ParsedHttpSource() {
 
     override fun chapterListSelector() = "a.chapter_link"
 
-    override fun chapterFromElement(element: Element): WebPage {
-        val url = element.attr("abs:href")
-        val chapterDiv = element.selectFirst("div.chapter")
-        // Extract only the chapter name, excluding the nested date element
-        val title =
-            if (chapterDiv != null) {
-                chapterDiv.ownText().trim().ifEmpty {
-                    chapterDiv.textNodes().joinToString("") { it.text() }.trim()
-                }
-            } else {
-                element.text().trim()
-            }
-        return WebPage(url, title)
-    }
+    override fun chapterFromElement(element: Element): WebPage = throw Exception(NOT_USED)
 
     override fun chapterListParse(
         novel: Novel,
         response: Response,
     ): List<WebPage> {
+        val firstHtml = response.body!!.string()
         val allChapters = mutableListOf<WebPage>()
-        var currentPage = 1
-        var hasMoreChapters = true
 
-        while (hasMoreChapters) {
-            val pageUrl =
-                if (currentPage == 1) {
-                    novel.url
-                } else {
-                    "${novel.url}?page=$currentPage"
-                }
+        // Parse chapters from first page
+        parseChaptersFromHtml(firstHtml, allChapters)
 
-            val pageResponse = client.newCall(GET(pageUrl, headers)).execute()
-            val document = pageResponse.asJsoup()
-            val chapters = document.select(chapterListSelector())
+        // Determine last page from pagination links (?page=N)
+        val lastPage =
+            RE_PAGE_NUM
+                .findAll(firstHtml)
+                .mapNotNull { it.groupValues[1].toIntOrNull() }
+                .maxOrNull() ?: 1
 
-            if (chapters.isEmpty()) {
-                hasMoreChapters = false
-            } else {
-                chapters.forEach { element ->
-                    allChapters.add(chapterFromElement(element))
-                }
-                currentPage++
-            }
+        // Fetch remaining pages
+        for (page in 2..lastPage) {
+            val html =
+                client
+                    .newCall(GET("${novel.url}?page=$page", headers))
+                    .execute()
+                    .body!!
+                    .string()
+            parseChaptersFromHtml(html, allChapters)
         }
 
-        // Reverse to get correct order (oldest to newest) and set order IDs
         return allChapters.reversed().mapIndexed { index, chapter ->
             chapter.orderId = index.toLong()
             chapter
+        }
+    }
+
+    /** Extract chapter links from raw HTML using regex — no Jsoup needed. */
+    private fun parseChaptersFromHtml(
+        html: String,
+        out: MutableList<WebPage>,
+    ) {
+        RE_CHAPTER_LINK.findAll(html).forEach { match ->
+            val url = match.groupValues[1].let { if (it.startsWith("http")) it else "$baseUrl$it" }
+            val title = decodeHtml(match.groupValues[2]).replace(Regex("""\s+"""), " ").trim()
+            out.add(WebPage(url, title))
         }
     }
     //endregion
@@ -231,5 +230,32 @@ class EmpireNovel : ParsedHttpSource() {
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; K) " +
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
+
+        // Novel details regex patterns
+        private val RE_IMAGE = Regex("""img\s+[^>]*class="show_image[^"]*"[^>]*data-src="([^"]+)"""")
+        private val RE_TITLE = Regex("""<h1[^>]*itemprop="[^"]*name[^"]*"[^>]*>([^<]+)</h1>""")
+        private val RE_DESC_MORE = Regex("""<span\s+id="more">([^<]+)</span>""")
+        private val RE_DESC_DD = Regex("""<dd[^>]*itemprop="description"[^>]*>(.*?)</dd>""", RegexOption.DOT_MATCHES_ALL)
+        private val RE_DETAIL_PAIR = Regex("""<div\s+class="d-flex\s+justify-content-between">\s*(\w+)\s*<span>([^<]*)</span>""")
+        private val RE_AUTHOR = Regex("""itemprop="author"[^>]*><a[^>]*>([^<]+)</a>""")
+        private val RE_GENRE = Regex("""itemprop="genre"[^>]*>([^<]+)</a>""")
+        private val RE_HTML_TAG = Regex("""<[^>]+>""")
+
+        // Chapter parsing regex patterns
+        private val RE_CHAPTER_LINK =
+            Regex(
+                """<a\s+class="chapter_link"\s+href="([^"]+)"[^>]*>.*?<div[^>]*class="[^"]*chapter[^"]*"[^>]*>\s*(?:<div[^>]*>)?\s*(Chapter(?:\s|&nbsp;)+[^\s<]+)""",
+                RegexOption.DOT_MATCHES_ALL,
+            )
+        private val RE_PAGE_NUM = Regex("""\?page=(\d+)""")
+
+        private fun decodeHtml(s: String): String =
+            s
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&nbsp;", " ")
     }
 }

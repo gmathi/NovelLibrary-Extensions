@@ -97,8 +97,8 @@ class EmpireNovel : ParsedHttpSource() {
             ?: imageElement?.attr("abs:src")
             ?: document.selectFirst("div.book img")?.attr("abs:src")
 
-        // Extract title
-        val title = document.selectFirst("h1[itemprop=name]")?.text()?.trim()
+        // Extract title — itemprop is "name headline" (space-separated), so use ~= for word match
+        val title = document.selectFirst("h1[itemprop~=name]")?.text()?.trim()
         if (title != null) {
             novel.name = title
         }
@@ -114,14 +114,16 @@ class EmpireNovel : ParsedHttpSource() {
 
         // Extract metadata from show_details section
         document.select("div.show_details div.d-flex").forEach {
-            val parts = it.text().split(Regex("\\s{2,}"))
-            if (parts.size >= 2) {
-                val key = parts[0].trim()
-                val value = parts.last().trim()
-                novel.metadata[key] = value
-
-                // Set specific fields
-                when (key.lowercase()) {
+            val label = it.ownText().trim()
+            val value =
+                it.selectFirst("span")?.text()?.trim() ?: it
+                    .children()
+                    .last()
+                    ?.text()
+                    ?.trim() ?: return@forEach
+            if (label.isNotEmpty() && value.isNotEmpty()) {
+                novel.metadata[label] = value
+                when (label.lowercase()) {
                     "status" -> novel.metadata["Status"] = value
                     "author" -> {
                         novel.authors = listOf(value)
@@ -156,7 +158,16 @@ class EmpireNovel : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): WebPage {
         val url = element.attr("abs:href")
-        val title = element.selectFirst("div.chapter")?.text()?.trim() ?: element.text().trim()
+        val chapterDiv = element.selectFirst("div.chapter")
+        // Extract only the chapter name, excluding the nested date element
+        val title =
+            if (chapterDiv != null) {
+                chapterDiv.ownText().trim().ifEmpty {
+                    chapterDiv.textNodes().joinToString("") { it.text() }.trim()
+                }
+            } else {
+                element.text().trim()
+            }
         return WebPage(url, title)
     }
 

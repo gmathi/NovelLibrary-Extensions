@@ -69,7 +69,7 @@ class EmpireNovel : ParsedHttpSource() {
             // Extract summary from nested object
             val summaryObj = item.optJSONObject("summary")
             if (summaryObj != null) {
-                novel.longDescription = summaryObj.optString("en", null)
+                novel.longDescription = summaryObj.optString("en").ifEmpty { null }
             }
 
             novels.add(novel)
@@ -227,7 +227,6 @@ class EmpireNovel : ParsedHttpSource() {
     //endregion
 
     companion object {
-
         // Novel details regex patterns
         private val RE_IMAGE = Regex("""img\s+[^>]*class="show_image[^"]*"[^>]*data-src="([^"]+)"""")
         private val RE_TITLE = Regex("""<h1[^>]*itemprop="[^"]*name[^"]*"[^>]*>([^<]+)</h1>""")

@@ -1,0 +1,123 @@
+// release-extensions.gradle
+// Builds signed release APKs and collects them to builds/ at the root.
+//
+// Usage:
+//   ./gradlew releaseExtensions -Pexts=all
+//   ./gradlew releaseExtensions -Pexts=libread
+//   ./gradlew releaseExtensions -Pexts=libread,empirenovel
+//   ./gradlew releaseExtensions -Pexts=all -PbumpVersion
+//   ./gradlew releaseExtensions -Pexts=libread,empirenovel -PbumpVersion
+
+def ALL_EXTENSIONS = [
+    'boxnovel', 'empirenovel', 'fanmtl', 'jpmtl', 'libread',
+    'lnmtl', 'novelbin', 'novelbuddy', 'novelfull', 'purrfiction',
+    'ranobes', 'royalroad', 'scribblehub', 'wuxiaworldsite'
+]
+
+task releaseExtensions {
+    group = 'release'
+    description = 'Builds release APKs and collects them to builds/. ' +
+                  'Use -Pexts=all|ext1,ext2 and optionally -PbumpVersion to increment version codes.'
+
+    doLast {
+        def extensionsParam = (project.findProperty('exts') ?: 'all').toString().trim()
+        def shouldBump     = project.hasProperty('bumpVersion')
+
+        def targetExtensions = (extensionsParam == 'all')
+            ? new ArrayList<>(ALL_EXTENSIONS)
+            : extensionsParam.split(',').collect { it.trim() }.findAll { it }
+
+        // Validate names
+        def invalid = targetExtensions.findAll { !ALL_EXTENSIONS.contains(it) }
+        if (invalid) {
+            throw new GradleException(
+                "Unknown extension(s): ${invalid.join(', ')}\n" +
+                "Available: ${ALL_EXTENSIONS.join(', ')}"
+            )
+        }
+
+        println ""
+        println "=" * 62
+        println " Release Extensions : ${targetExtensions.join(', ')}"
+        println " Bump version codes : ${shouldBump}"
+        println "=" * 62
+
+        def stepCount = shouldBump ? 3 : 2
+        def step = 0
+
+        // ── Step: Bump version codes (optional) ───────────────────────
+        if (shouldBump) {
+            step++
+            println "\n[${step}/${stepCount}] Bumping version codes..."
+            targetExtensions.each { ext ->
+                def buildFile = file("extensions/individual/en/${ext}/build.gradle")
+                if (!buildFile.exists()) {
+                    throw new GradleException("Build file not found for extension: ${ext}")
+                }
+                def content = buildFile.text
+                def matcher = (content =~ /extVersionCode\s*=\s*(\d+)/)
+                if (!matcher) {
+                    throw new GradleException("Could not find extVersionCode in ${buildFile}")
+                }
+                def oldVer = matcher[0][1].toInteger()
+                def newVer = oldVer + 1
+                buildFile.text = content.replaceFirst(/extVersionCode\s*=\s*\d+/, "extVersionCode = ${newVer}")
+                println "  ${ext.padRight(20)} ${oldVer} → ${newVer}"
+            }
+        }
+
+        // ── Step: Build release APKs via a fresh Gradle invocation ────
+        // A new invocation is required so that any bumped version codes
+        // are picked up during project evaluation.
+        step++
+        println "\n[${step}/${stepCount}] Building release APKs..."
+        def moduleTasks = targetExtensions.collect {
+            ":extensions:individual:en:${it}:assembleRelease"
+        }
+
+        def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+        def gradleWrapper = isWindows
+            ? new File(rootDir, 'gradlew.bat').absolutePath
+            : new File(rootDir, 'gradlew').absolutePath
+        def gradleCmd = isWindows ? ['cmd', '/c', gradleWrapper] : [gradleWrapper]
+
+        exec {
+            workingDir rootDir
+            commandLine(*gradleCmd, '--no-daemon', '--parallel', *moduleTasks)
+        }
+
+        // ── Step: Collect APKs into builds/ ───────────────────────────
+        step++
+        println "\n[${step}/${stepCount}] Collecting APKs to builds/..."
+        def buildsDir = file("builds")
+        buildsDir.mkdirs()
+
+        def copied = 0
+        targetExtensions.each { ext ->
+            def releaseDir = file("extensions/individual/en/${ext}/build/outputs/apk/release")
+            if (releaseDir.exists()) {
+                releaseDir.listFiles()?.each { apkFile ->
+                    if (apkFile.name.endsWith('.apk')) {
+                        // novellibrary-en.boxnovel-v1.0.5-release.apk → novellibrary-en.boxnovel-v1.0.5.apk
+                        def destName = apkFile.name.replace('-release.apk', '.apk')
+                        copy {
+                            from apkFile
+                            into buildsDir
+                            rename { destName }
+                        }
+                        println "  ✓ ${destName}"
+                        copied++
+                    }
+                }
+            } else {
+                println "  ⚠ No release output found for: ${ext}"
+            }
+        }
+
+        println ""
+        println "=" * 62
+        println " Done! ${copied} APK(s) → ${buildsDir.canonicalPath}"
+        println "=" * 62
+        println ""
+    }
+}

@@ -28,3 +28,6 @@ task clean(type: Delete) {
 
 // Apply consolidate builds script
 apply from: 'consolidate-builds.gradle'
+
+// Apply release-extensions script
+apply from: 'release-extensions.gradle'

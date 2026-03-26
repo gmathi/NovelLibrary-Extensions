@@ -25,7 +25,7 @@ class LibRead : ParsedHttpSource() {
     override val lang: String
         get() = "en"
     override val supportsLatest: Boolean
-        get() = true
+        get() = false
     override val name: String
         get() = "LibRead"
 
@@ -257,5 +257,4 @@ class LibRead : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = "div.paginator a.btn.link:not(.active)"
 
     //endregion
-
 }

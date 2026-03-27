@@ -8,27 +8,52 @@
 //   ./gradlew releaseExtensions -Pexts=all -PbumpVersion
 //   ./gradlew releaseExtensions -Pexts=libread,empirenovel -PbumpVersion
 
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
 def ALL_EXTENSIONS = [
     'boxnovel', 'empirenovel', 'fanmtl', 'jpmtl', 'libread',
     'lnmtl', 'novelbin', 'novelbuddy', 'novelfull', 'purrfiction',
     'ranobes', 'royalroad', 'scribblehub', 'wuxiaworldsite'
 ]
 
-// Icon search order: prefer higher-res foreground, fall back to full launcher icon
+// Icon search order: prefer higher-res foreground, fall back to full launcher icon.
+// Each density is checked for .png first, then .webp.
 def ICON_SEARCH_PATHS = [
     'mipmap-xxxhdpi/ic_launcher_foreground.png',
+    'mipmap-xxxhdpi/ic_launcher_foreground.webp',
     'mipmap-xxhdpi/ic_launcher_foreground.png',
+    'mipmap-xxhdpi/ic_launcher_foreground.webp',
     'mipmap-xhdpi/ic_launcher_foreground.png',
+    'mipmap-xhdpi/ic_launcher_foreground.webp',
     'mipmap-hdpi/ic_launcher_foreground.png',
+    'mipmap-hdpi/ic_launcher_foreground.webp',
     'mipmap-mdpi/ic_launcher_foreground.png',
+    'mipmap-mdpi/ic_launcher_foreground.webp',
     'mipmap-xxxhdpi/ic_launcher.png',
+    'mipmap-xxxhdpi/ic_launcher.webp',
     'mipmap-xxhdpi/ic_launcher.png',
+    'mipmap-xxhdpi/ic_launcher.webp',
     'mipmap-xhdpi/ic_launcher.png',
+    'mipmap-xhdpi/ic_launcher.webp',
     'mipmap-hdpi/ic_launcher.png',
+    'mipmap-hdpi/ic_launcher.webp',
     'mipmap-mdpi/ic_launcher.png',
+    'mipmap-mdpi/ic_launcher.webp',
 ]
 
-task releaseExtensions {
+// Runs a command, streams its output, and throws on non-zero exit.
+def runCommand = { List cmd, File workDir ->
+    def proc = new ProcessBuilder(cmd.collect { it.toString() })
+        .directory(workDir)
+        .redirectErrorStream(true)
+        .start()
+    proc.inputStream.eachLine { println "    $it" }
+    def exit = proc.waitFor()
+    if (exit != 0) throw new GradleException("Command failed (exit $exit): ${cmd.join(' ')}")
+}
+
+tasks.register('releaseExtensions') {
     group = 'release'
     description = 'Builds release APKs and collects APKs + icons to builds/. ' +
                   'Use -Pexts=all|ext1,ext2 and optionally -PbumpVersion to increment version codes.'
@@ -85,20 +110,16 @@ task releaseExtensions {
         // are picked up during project evaluation.
         step++
         println "\n[${step}/${stepCount}] Building release APKs..."
-        def moduleTasks = targetExtensions.collect {
-            ":extensions:individual:en:${it}:assembleRelease"
-        }
+        def moduleTasks = targetExtensions.collect { ":extensions:individual:en:${it}:assembleRelease" }
 
         def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
-        def gradleWrapper = isWindows
-            ? new File(rootDir, 'gradlew.bat').absolutePath
-            : new File(rootDir, 'gradlew').absolutePath
-        def gradleCmd = isWindows ? ['cmd', '/c', gradleWrapper] : [gradleWrapper]
+        def gradleWrapper = new File(rootDir, isWindows ? 'gradlew.bat' : 'gradlew').absolutePath
+        def buildCmd = new ArrayList<String>()
+        if (isWindows) { buildCmd.addAll(['cmd', '/c', gradleWrapper]) } else { buildCmd.add(gradleWrapper) }
+        buildCmd.addAll(['--no-daemon', '--parallel'])
+        buildCmd.addAll(moduleTasks)
 
-        exec {
-            workingDir rootDir
-            commandLine(*gradleCmd, '--no-daemon', '--parallel', *moduleTasks)
-        }
+        runCommand(buildCmd, rootDir)
 
         def apkDir  = file("builds/apk")
         def iconDir = file("builds/icon")
@@ -119,11 +140,8 @@ task releaseExtensions {
                     if (apkFile.name.endsWith('.apk')) {
                         // novellibrary-en.boxnovel-v1.0.5-release.apk → novellibrary-en.boxnovel-v1.0.5.apk
                         def destName = apkFile.name.replace('-release.apk', '.apk')
-                        copy {
-                            from apkFile
-                            into apkDir
-                            rename { destName }
-                        }
+                        Files.copy(apkFile.toPath(), new File(apkDir, destName).toPath(),
+                            StandardCopyOption.REPLACE_EXISTING)
                         println "  ✓ ${destName}"
                         baseNames[ext] = destName.replace('.apk', '')
                         apksCopied++
@@ -134,7 +152,7 @@ task releaseExtensions {
             }
         }
 
-        // ── Step: Collect icons ───────────────────────────────────────
+        // ── Step: Collect icons (converting .webp → .png) ────────────
         step++
         println "\n[${step}/${stepCount}] Collecting icons to builds/icon/..."
         def iconsCopied = 0
@@ -148,18 +166,29 @@ task releaseExtensions {
             def resDir = file("extensions/individual/en/${ext}/res")
             def found = ICON_SEARCH_PATHS.find { iconPath ->
                 def iconFile = new File(resDir, iconPath)
-                if (iconFile.exists()) {
-                    def destName = "${baseName}.png"
-                    copy {
-                        from iconFile
-                        into iconDir
-                        rename { destName }
-                    }
-                    println "  ✓ ${destName}"
-                    iconsCopied++
-                    return true
+                if (!iconFile.exists()) return false
+
+                def destFile = new File(iconDir, "${baseName}.png")
+                if (iconFile.name.endsWith('.webp')) {
+                    // Use PowerShell WPF/WIC to convert WebP → PNG (Windows 11 native WebP codec)
+                    def src = iconFile.absolutePath.replace('\\', '/')
+                    def dst = destFile.absolutePath.replace('\\', '/')
+                    runCommand([
+                        'powershell', '-NonInteractive', '-NoProfile', '-Command',
+                        "Add-Type -AssemblyName PresentationCore; " +
+                        "\$s=[IO.File]::OpenRead('${src}'); " +
+                        "\$dec=[Windows.Media.Imaging.BitmapDecoder]::Create(\$s,'None','OnLoad'); " +
+                        "\$enc=New-Object Windows.Media.Imaging.PngBitmapEncoder; " +
+                        "\$enc.Frames.Add(\$dec.Frames[0]); " +
+                        "\$o=[IO.File]::Open('${dst}','Create'); " +
+                        "\$enc.Save(\$o); \$o.Close(); \$s.Close()"
+                    ], rootDir)
+                } else {
+                    Files.copy(iconFile.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
                 }
-                return false
+                println "  ✓ ${destFile.name}"
+                iconsCopied++
+                return true
             }
             if (!found) {
                 println "  ⚠ No icon found for: ${ext}"

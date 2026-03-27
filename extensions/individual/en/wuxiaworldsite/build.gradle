@@ -5,7 +5,7 @@ ext {
     extName = 'WuxiaWorldSite'
     pkgNameSuffix = 'en.wuxiaworldsite'
     extClass = '.WuxiaWorldSite'
-    extVersionCode = 2
+    extVersionCode = 5
     libVersion = '1.0'
 }
 

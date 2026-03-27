@@ -170,5 +170,4 @@ class NovelBin : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
 //endregion
-
 }

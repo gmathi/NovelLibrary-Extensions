@@ -230,5 +230,4 @@ class RoyalRoad : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = throw Exception(NOT_USED)
 
 //endregion
-
 }

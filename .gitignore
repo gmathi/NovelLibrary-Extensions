@@ -99,6 +99,9 @@ extensions/individual/en/novelbuddy/debug/output-metadata.json
 # Claude Code
 .claude/settings.*
 
+# Release builds output
+builds/
+
 # Test results
 *-results.json
 *-test-results.json

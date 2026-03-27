@@ -5,7 +5,7 @@ ext {
     extName = 'LibRead'
     pkgNameSuffix = 'en.libread'
     extClass = '.LibRead'
-    extVersionCode = 0
+    extVersionCode = 2
     libVersion = '1.0'
 }
 

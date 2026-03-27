@@ -5,7 +5,7 @@ ext {
     extName = 'LNMTL'
     pkgNameSuffix = 'en.lnmtl'
     extClass = '.LNMTL'
-    extVersionCode = 1
+    extVersionCode = 2
     libVersion = '1.0'
 }
 

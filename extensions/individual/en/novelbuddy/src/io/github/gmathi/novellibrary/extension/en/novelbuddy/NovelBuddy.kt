@@ -244,5 +244,4 @@ class NovelBuddy : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = "div.paginator a.btn.link:not(.active)"
 
 //endregion
-
 }

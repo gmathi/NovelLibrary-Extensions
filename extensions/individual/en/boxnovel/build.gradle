@@ -5,7 +5,7 @@ ext {
     extName = 'BoxNovel'
     pkgNameSuffix = 'en.boxnovel'
     extClass = '.BoxNovel'
-    extVersionCode = 4
+    extVersionCode = 5
     libVersion = '1.0'
 }
 

@@ -151,5 +151,4 @@ class ScribbleHub : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = throw Exception(NOT_USED)
 
 //endregion
-
 }

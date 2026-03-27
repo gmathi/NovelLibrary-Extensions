@@ -1,5 +1,5 @@
 // release-extensions.gradle
-// Builds signed release APKs and collects them to builds/ at the root.
+// Builds signed release APKs, collects APKs and icons to builds/ at the root.
 //
 // Usage:
 //   ./gradlew releaseExtensions -Pexts=all
@@ -14,14 +14,28 @@ def ALL_EXTENSIONS = [
     'ranobes', 'royalroad', 'scribblehub', 'wuxiaworldsite'
 ]
 
+// Icon search order: prefer higher-res foreground, fall back to full launcher icon
+def ICON_SEARCH_PATHS = [
+    'mipmap-xxxhdpi/ic_launcher_foreground.png',
+    'mipmap-xxhdpi/ic_launcher_foreground.png',
+    'mipmap-xhdpi/ic_launcher_foreground.png',
+    'mipmap-hdpi/ic_launcher_foreground.png',
+    'mipmap-mdpi/ic_launcher_foreground.png',
+    'mipmap-xxxhdpi/ic_launcher.png',
+    'mipmap-xxhdpi/ic_launcher.png',
+    'mipmap-xhdpi/ic_launcher.png',
+    'mipmap-hdpi/ic_launcher.png',
+    'mipmap-mdpi/ic_launcher.png',
+]
+
 task releaseExtensions {
     group = 'release'
-    description = 'Builds release APKs and collects them to builds/. ' +
+    description = 'Builds release APKs and collects APKs + icons to builds/. ' +
                   'Use -Pexts=all|ext1,ext2 and optionally -PbumpVersion to increment version codes.'
 
     doLast {
         def extensionsParam = (project.findProperty('exts') ?: 'all').toString().trim()
-        def shouldBump     = project.hasProperty('bumpVersion')
+        def shouldBump      = project.hasProperty('bumpVersion')
 
         def targetExtensions = (extensionsParam == 'all')
             ? new ArrayList<>(ALL_EXTENSIONS)
@@ -42,7 +56,7 @@ task releaseExtensions {
         println " Bump version codes : ${shouldBump}"
         println "=" * 62
 
-        def stepCount = shouldBump ? 3 : 2
+        def stepCount = shouldBump ? 4 : 3
         def step = 0
 
         // ── Step: Bump version codes (optional) ───────────────────────
@@ -86,13 +100,18 @@ task releaseExtensions {
             commandLine(*gradleCmd, '--no-daemon', '--parallel', *moduleTasks)
         }
 
-        // ── Step: Collect APKs into builds/ ───────────────────────────
-        step++
-        println "\n[${step}/${stepCount}] Collecting APKs to builds/..."
-        def buildsDir = file("builds")
-        buildsDir.mkdirs()
+        def apkDir  = file("builds/apk")
+        def iconDir = file("builds/icon")
+        apkDir.mkdirs()
+        iconDir.mkdirs()
 
-        def copied = 0
+        // ── Step: Collect APKs ────────────────────────────────────────
+        step++
+        println "\n[${step}/${stepCount}] Collecting APKs to builds/apk/..."
+        def apksCopied = 0
+        // ext → base name (e.g. "novellibrary-en.libread-v1.0.2"), used for icon naming
+        def baseNames = [:]
+
         targetExtensions.each { ext ->
             def releaseDir = file("extensions/individual/en/${ext}/build/outputs/apk/release")
             if (releaseDir.exists()) {
@@ -102,11 +121,12 @@ task releaseExtensions {
                         def destName = apkFile.name.replace('-release.apk', '.apk')
                         copy {
                             from apkFile
-                            into buildsDir
+                            into apkDir
                             rename { destName }
                         }
                         println "  ✓ ${destName}"
-                        copied++
+                        baseNames[ext] = destName.replace('.apk', '')
+                        apksCopied++
                     }
                 }
             } else {
@@ -114,9 +134,43 @@ task releaseExtensions {
             }
         }
 
+        // ── Step: Collect icons ───────────────────────────────────────
+        step++
+        println "\n[${step}/${stepCount}] Collecting icons to builds/icon/..."
+        def iconsCopied = 0
+
+        targetExtensions.each { ext ->
+            def baseName = baseNames[ext]
+            if (!baseName) {
+                println "  ⚠ Skipping icon for ${ext} (no APK was collected)"
+                return
+            }
+            def resDir = file("extensions/individual/en/${ext}/res")
+            def found = ICON_SEARCH_PATHS.find { iconPath ->
+                def iconFile = new File(resDir, iconPath)
+                if (iconFile.exists()) {
+                    def destName = "${baseName}.png"
+                    copy {
+                        from iconFile
+                        into iconDir
+                        rename { destName }
+                    }
+                    println "  ✓ ${destName}"
+                    iconsCopied++
+                    return true
+                }
+                return false
+            }
+            if (!found) {
+                println "  ⚠ No icon found for: ${ext}"
+            }
+        }
+
         println ""
         println "=" * 62
-        println " Done! ${copied} APK(s) → ${buildsDir.canonicalPath}"
+        println " Done!"
+        println "   APKs  (${apksCopied})  → ${apkDir.canonicalPath}"
+        println "   Icons (${iconsCopied}) → ${iconDir.canonicalPath}"
         println "=" * 62
         println ""
     }

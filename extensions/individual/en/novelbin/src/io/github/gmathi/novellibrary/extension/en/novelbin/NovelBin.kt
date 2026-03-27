@@ -33,7 +33,7 @@ class NovelBin : ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder =
         Headers
             .Builder()
-            .add("User-Agent", USER_AGENT)
+            .add("User-Agent", defaultUserAgent)
             .add("Referer", baseUrl)
 
     //region Search Novel
@@ -170,10 +170,4 @@ class NovelBin : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
 //endregion
-
-    companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
-    }
 }

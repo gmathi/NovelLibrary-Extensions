@@ -7,15 +7,16 @@ import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.util.Exceptions.NOT_USED
-import io.github.gmathi.novellibrary.util.network.asJsoup
-import okhttp3.*
+import okhttp3.Headers
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONArray
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 class EmpireNovel : ParsedHttpSource() {
-
     override val id: Long
         get() = 13L
     override val baseUrl: String
@@ -30,12 +31,18 @@ class EmpireNovel : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", defaultUserAgent)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val url = "$baseUrl/search-live?q=$encodedQuery"
         return GET(url, headers)
@@ -47,13 +54,23 @@ class EmpireNovel : ParsedHttpSource() {
 
         for (i in 0 until jsonArray.length()) {
             val item = jsonArray.getJSONObject(i)
-            val title = item.getString("title")
+            val title = item.getString("name")
             val slug = item.getString("slug")
             val novelUrl = "$baseUrl/novel/$slug"
 
             val novel = Novel(title, novelUrl, id)
-            novel.imageUrl = item.optString("image", null)
+            // Build cover URL from slug if cover flag is set
+            if (item.optInt("cover", 0) == 1) {
+                // www.empirenovel.com/uploads/novel/gods-impact-online/cover/cover_250x350.jpg
+                novel.imageUrl = "$baseUrl/uploads/novel/$slug/cover/cover_250x350.jpg"
+            }
             novel.metadata["slug"] = slug
+
+            // Extract summary from nested object
+            val summaryObj = item.optJSONObject("summary")
+            if (summaryObj != null) {
+                novel.longDescription = summaryObj.optString("en").ifEmpty { null }
+            }
 
             novels.add(novel)
         }
@@ -61,134 +78,180 @@ class EmpireNovel : ParsedHttpSource() {
         return NovelsPage(novels, hasNextPage = false)
     }
 
-    override fun searchNovelsFromElement(element: Element): Novel {
-        throw Exception(NOT_USED)
-    }
+    override fun searchNovelsFromElement(element: Element): Novel = throw Exception(NOT_USED)
 
     override fun searchNovelsSelector() = throw Exception(NOT_USED)
+
     override fun searchNovelsNextPageSelector() = "a:contains(Last)"
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, document: Document): Novel {
-        // Extract image from the book cover (try data-src first for lazy-loaded, then src)
-        val imageElement = document.selectFirst("img.show_image")
-        novel.imageUrl = imageElement?.attr("abs:data-src")?.takeIf { it.isNotEmpty() }
-            ?: imageElement?.attr("abs:src")
-            ?: document.selectFirst("div.book img")?.attr("abs:src")
 
-        // Extract title
-        val title = document.selectFirst("h1[itemprop=name]")?.text()?.trim()
-        if (title != null) {
-            novel.name = title
+    /** Fast path: parse raw HTML string with regex, skip Jsoup entirely. */
+    override fun novelDetailsParse(
+        novel: Novel,
+        response: Response,
+    ): Novel {
+        val html = response.body!!.string()
+
+        // Image — data-src on img.show_image
+        RE_IMAGE.find(html)?.groupValues?.get(1)?.let { src ->
+            novel.imageUrl = if (src.startsWith("http")) src else "$baseUrl$src"
         }
 
-        // Extract description
-        val descriptionElement = document.selectFirst("dd[itemprop=description]")
-        if (descriptionElement != null) {
-            val fullDescription = descriptionElement.selectFirst("span#more")?.text()?.trim()
-                ?: descriptionElement.text().trim()
-            novel.longDescription = fullDescription
-        }
+        // Title — first <h1> with itemprop containing "name"
+        RE_TITLE
+            .find(html)
+            ?.groupValues
+            ?.get(1)
+            ?.let { novel.name = decodeHtml(it).trim() }
 
-        // Extract metadata from show_details section
-        document.select("div.show_details div.d-flex").forEach {
-            val parts = it.text().split(Regex("\\s{2,}"))
-            if (parts.size >= 2) {
-                val key = parts[0].trim()
-                val value = parts.last().trim()
-                novel.metadata[key] = value
+        // Description — content inside <span id="more">...</span>, fall back to dd[itemprop=description]
+        novel.longDescription = RE_DESC_MORE
+            .find(html)
+            ?.groupValues
+            ?.get(1)
+            ?.let { decodeHtml(it).trim() }
+            ?: RE_DESC_DD
+                .find(html)
+                ?.groupValues
+                ?.get(1)
+                ?.let { decodeHtml(it.replace(RE_HTML_TAG, "")).trim() }
 
-                // Set specific fields
-                when (key.lowercase()) {
-                    "status" -> novel.metadata["Status"] = value
-                    "author" -> {
-                        novel.authors = listOf(value)
-                        novel.metadata["Author"] = value
-                    }
+        // Status & Author from show_details div.d-flex pairs
+        RE_DETAIL_PAIR.findAll(html).forEach { match ->
+            val label = match.groupValues[1].trim().lowercase()
+            val value = decodeHtml(match.groupValues[2]).trim()
+            when (label) {
+                "status" -> novel.metadata["Status"] = value
+                "author" -> {
+                    novel.authors = listOf(value)
+                    novel.metadata["Author"] = value
                 }
             }
         }
 
-        // Extract author from itemprop
-        val author = document.selectFirst("span[itemprop=author] a")?.text()?.trim()
-        if (author != null && novel.authors.isNullOrEmpty()) {
-            novel.authors = listOf(author)
-            novel.metadata["Author"] = author
+        // Author fallback from itemprop=author
+        if (novel.authors.isNullOrEmpty()) {
+            RE_AUTHOR.find(html)?.groupValues?.get(1)?.let {
+                val author = decodeHtml(it).trim()
+                novel.authors = listOf(author)
+                novel.metadata["Author"] = author
+            }
         }
 
-        // Extract genres/categories
-        val genres = document.select("a.category[itemprop=genre]").map { it.text().trim() }
-        if (genres.isNotEmpty()) {
-            novel.genres = genres
-            novel.metadata["Genres"] = genres.joinToString(", ")
-        }
+        // Genres from itemprop="genre"
+        val genres = RE_GENRE.findAll(html).map { decodeHtml(it.groupValues[1]).trim() }.toList()
+        if (genres.isNotEmpty()) novel.genres = genres
 
         return novel
     }
+
+    /** Not used — we override the Response version directly. */
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel = novel
     //endregion
 
     //region Chapters
-    override fun chapterListRequest(novel: Novel): Request {
-        return GET(novel.url, headers)
-    }
+    override fun chapterListRequest(novel: Novel): Request = GET(novel.url, headers)
 
     override fun chapterListSelector() = "a.chapter_link"
 
-    override fun chapterFromElement(element: Element): WebPage {
-        val url = element.attr("abs:href")
-        val title = element.selectFirst("div.chapter")?.text()?.trim() ?: element.text().trim()
-        return WebPage(url, title)
-    }
+    override fun chapterFromElement(element: Element): WebPage = throw Exception(NOT_USED)
 
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
+        val firstHtml = response.body!!.string()
         val allChapters = mutableListOf<WebPage>()
-        var currentPage = 1
-        var hasMoreChapters = true
 
-        while (hasMoreChapters) {
-            val pageUrl = if (currentPage == 1) {
-                novel.url
-            } else {
-                "${novel.url}?page=$currentPage"
-            }
+        // Parse chapters from first page
+        parseChaptersFromHtml(firstHtml, allChapters)
 
-            val pageResponse = client.newCall(GET(pageUrl, headers)).execute()
-            val document = pageResponse.asJsoup()
-            val chapters = document.select(chapterListSelector())
+        // Determine last page from pagination links (?page=N)
+        val lastPage =
+            RE_PAGE_NUM
+                .findAll(firstHtml)
+                .mapNotNull { it.groupValues[1].toIntOrNull() }
+                .maxOrNull() ?: 1
 
-            if (chapters.isEmpty()) {
-                hasMoreChapters = false
-            } else {
-                chapters.forEach { element ->
-                    allChapters.add(chapterFromElement(element))
-                }
-                currentPage++
-            }
+        // Fetch remaining pages
+        for (page in 2..lastPage) {
+            val html =
+                client
+                    .newCall(GET("${novel.url}?page=$page", headers))
+                    .execute()
+                    .body!!
+                    .string()
+            parseChaptersFromHtml(html, allChapters)
         }
 
-        // Reverse to get correct order (oldest to newest) and set order IDs
         return allChapters.reversed().mapIndexed { index, chapter ->
             chapter.orderId = index.toLong()
             chapter
+        }
+    }
+
+    /** Extract chapter links from raw HTML using regex — no Jsoup needed. */
+    private fun parseChaptersFromHtml(
+        html: String,
+        out: MutableList<WebPage>,
+    ) {
+        RE_CHAPTER_LINK.findAll(html).forEach { match ->
+            val url = match.groupValues[1].let { if (it.startsWith("http")) it else "$baseUrl$it" }
+            val title = decodeHtml(match.groupValues[2]).replace(Regex("""\s+"""), " ").trim()
+            out.add(WebPage(url, title))
         }
     }
     //endregion
 
     //region stubs
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(NOT_USED)
+
     override fun latestUpdatesSelector(): String = throw Exception(NOT_USED)
+
     override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
     override fun latestUpdatesNextPageSelector(): String = throw Exception(NOT_USED)
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(NOT_USED)
+
     override fun popularNovelsSelector(): String = throw Exception(NOT_USED)
+
     override fun popularNovelsFromElement(element: Element): Novel = throw Exception(NOT_USED)
+
     override fun popularNovelNextPageSelector(): String = throw Exception(NOT_USED)
     //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
+        // Novel details regex patterns
+        private val RE_IMAGE = Regex("""img\s+[^>]*class="show_image[^"]*"[^>]*data-src="([^"]+)"""")
+        private val RE_TITLE = Regex("""<h1[^>]*itemprop="[^"]*name[^"]*"[^>]*>([^<]+)</h1>""")
+        private val RE_DESC_MORE = Regex("""<span\s+id="more">([^<]+)</span>""")
+        private val RE_DESC_DD = Regex("""<dd[^>]*itemprop="description"[^>]*>(.*?)</dd>""", RegexOption.DOT_MATCHES_ALL)
+        private val RE_DETAIL_PAIR = Regex("""<div\s+class="d-flex\s+justify-content-between">\s*(\w+)\s*<span>([^<]*)</span>""")
+        private val RE_AUTHOR = Regex("""itemprop="author"[^>]*><a[^>]*>([^<]+)</a>""")
+        private val RE_GENRE = Regex("""itemprop="genre"[^>]*>([^<]+)</a>""")
+        private val RE_HTML_TAG = Regex("""<[^>]+>""")
+
+        // Chapter parsing regex patterns
+        private val RE_CHAPTER_LINK =
+            Regex(
+                """<a\s+class="chapter_link"\s+href="([^"]+)"[^>]*>.*?<div[^>]*class="[^"]*chapter[^"]*"[^>]*>\s*(?:<div[^>]*>)?\s*(Chapter(?:\s|&nbsp;)+[^\s<]+)""",
+                RegexOption.DOT_MATCHES_ALL,
+            )
+        private val RE_PAGE_NUM = Regex("""\?page=(\d+)""")
+
+        private fun decodeHtml(s: String): String =
+            s
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&nbsp;", " ")
     }
 }

@@ -2,15 +2,15 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 ext {
-    extName = 'JPMTL'
-    pkgNameSuffix = 'en.jpmtl'
-    extClass = '.JPMTL'
+    extName = 'LibRead'
+    pkgNameSuffix = 'en.libread'
+    extClass = '.LibRead'
     extVersionCode = 2
     libVersion = '1.0'
 }
 
 android {
-    namespace = 'io.github.gmathi.novellibrary.extension.en.jpmtl'
+    namespace = 'io.github.gmathi.novellibrary.extension.en.libread'
 }
 
 apply from: "$rootDir/common.gradle"

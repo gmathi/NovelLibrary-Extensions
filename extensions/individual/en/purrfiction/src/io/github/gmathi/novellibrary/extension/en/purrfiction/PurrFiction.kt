@@ -20,7 +20,6 @@ import okhttp3.Request
 import okhttp3.Response
 
 class PurrFiction : HttpSource() {
-
     override val id: Long
         get() = 3L
     override val baseUrl: String
@@ -32,14 +31,21 @@ class PurrFiction : HttpSource() {
     override val name: String
         get() = "PurrFiction"
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", defaultUserAgent)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url =
-            baseUrl + "V2/books/search?language=ALL&filter=0&name=${query.encodeBase64ToString()}&sort=6&page=${page - 1}&onlyOffline=true&genreIds=0&genreCombining=0&tagIds=0&tagCombining=0&minChapterCount=0&maxChapterCount=4000"
+            baseUrl +
+                "V2/books/search?language=ALL&filter=0&name=${query.encodeBase64ToString()}&sort=6&page=${page - 1}&onlyOffline=true&genreIds=0&genreCombining=0&tagIds=0&tagCombining=0&minChapterCount=0&maxChapterCount=4000"
         return GET(url, headers = headers)
     }
 
@@ -72,7 +78,10 @@ class PurrFiction : HttpSource() {
         return GET(url, headers = headers)
     }
 
-    override fun novelDetailsParse(novel: Novel, response: Response): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        response: Response,
+    ): Novel {
         val jsonString = response.body?.string() ?: return novel
         val rootJsonObject = JsonParser.parseString(jsonString)?.asJsonObject ?: return novel
 
@@ -91,10 +100,14 @@ class PurrFiction : HttpSource() {
         }
         purrfictionGenres?.let { map ->
             novel.genres =
-                booksDto?.getAsJsonArray("genreIds")?.filter { map[it.asInt] != null }
+                booksDto
+                    ?.getAsJsonArray("genreIds")
+                    ?.filter { map[it.asInt] != null }
                     ?.map { map[it.asInt]!! }
             novel.metadata["Genre(s)"] =
-                booksDto?.getAsJsonArray("tagIds")?.filter { map[it.asInt] != null }
+                booksDto
+                    ?.getAsJsonArray("tagIds")
+                    ?.filter { map[it.asInt] != null }
                     ?.joinToString(", ") { map[it.asInt]!! }
         }
 
@@ -104,7 +117,9 @@ class PurrFiction : HttpSource() {
         }
         purrfictionTags?.let { map ->
             novel.metadata["Tag(s)"] =
-                booksDto?.getAsJsonArray("tagIds")?.filter { map[it.asInt] != null }
+                booksDto
+                    ?.getAsJsonArray("tagIds")
+                    ?.filter { map[it.asInt] != null }
                     ?.joinToString(", ") { map[it.asInt]!! }
         }
 
@@ -124,36 +139,41 @@ class PurrFiction : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
-
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
         val jsonString = response.body?.string() ?: throw Exception(NETWORK_ERROR)
-        val releasesArray = JsonParser.parseString(jsonString)?.asJsonArray
-            ?: throw Exception(NETWORK_ERROR)
+        val releasesArray =
+            JsonParser.parseString(jsonString)?.asJsonArray
+                ?: throw Exception(NETWORK_ERROR)
 
         var orderId = 0L
         val chapters = ArrayList<WebPage>()
         val purrfictionChaptersArray =
             Gson().fromJson(releasesArray.toString(), Array<PurrFictionChapter>::class.java)
 
-        purrfictionChaptersArray.sortedWith(
-            Comparator<PurrFictionChapter> { o1, o2 ->
-                val volumeDifference = (o1.chapterVolume * 100).toInt() - (o2.chapterVolume * 100).toInt()
-                if (volumeDifference != 0) return@Comparator volumeDifference // returns the volume difference
-                // else returns the chapter difference
-                return@Comparator (o1.chapterNumber * 100).toInt() - (o2.chapterNumber * 100).toInt()
+        purrfictionChaptersArray
+            .sortedWith(
+                Comparator<PurrFictionChapter> { o1, o2 ->
+                    val volumeDifference = (o1.chapterVolume * 100).toInt() - (o2.chapterVolume * 100).toInt()
+                    if (volumeDifference != 0) return@Comparator volumeDifference // returns the volume difference
+                    // else returns the chapter difference
+                    return@Comparator (o1.chapterNumber * 100).toInt() - (o2.chapterNumber * 100).toInt()
+                },
+            ).forEach {
+                val url = "${baseUrl}read/${it.bookId}/${it.language}/${it.chapterId}"
+                val chapterName =
+                    arrayListOf(
+                        it.chapterVolume,
+                        it.chapterNumber,
+                        it.chapterName ?: "",
+                    ).filter { name -> name.toString().isNotBlank() }.joinToString(" - ")
+                val chapter = WebPage(url, chapterName)
+                chapter.orderId = orderId++
+                chapter.translatorSourceName = it.websiteName
+                chapters.add(chapter)
             }
-        ).forEach {
-            val url = "${baseUrl}read/${it.bookId}/${it.language}/${it.chapterId}"
-            val chapterName = arrayListOf(
-                it.chapterVolume,
-                it.chapterNumber,
-                it.chapterName ?: ""
-            ).filter { name -> name.toString().isNotBlank() }.joinToString(" - ")
-            val chapter = WebPage(url, chapterName)
-            chapter.orderId = orderId++
-            chapter.translatorSourceName = it.websiteName
-            chapters.add(chapter)
-        }
 
         return chapters
     }
@@ -162,7 +182,6 @@ class PurrFiction : HttpSource() {
     //region Genres & Tags
     private fun getPurrFictionGenres() {
         try {
-
             val request = GET(baseUrl + "V1/genres", headers)
             val response = client.newCall(request).safeExecute()
             val jsonString = response.body?.string() ?: return
@@ -180,7 +199,6 @@ class PurrFiction : HttpSource() {
 
     private fun getPurrFictionTags() {
         try {
-
             val request = GET(baseUrl + "V1/tags", headers)
             val response = client.newCall(request).safeExecute()
             val jsonString = response.body?.string() ?: return
@@ -199,18 +217,15 @@ class PurrFiction : HttpSource() {
 
     //region stubs
     override fun popularNovelsRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
-    override fun popularNovelsParse(response: Response): NovelsPage =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun popularNovelsParse(response: Response): NovelsPage = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
-    override fun latestUpdatesParse(response: Response): NovelsPage =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun latestUpdatesParse(response: Response): NovelsPage = throw Exception(MISSING_IMPLEMENTATION)
     //endregion
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
-
         // Below is to cache PurrFiction Genres & Tags
         private var purrfictionGenres: HashMap<Int, String>? = null
         private var purrfictionTags: HashMap<Int, String>? = null
@@ -230,6 +245,6 @@ class PurrFiction : HttpSource() {
         @SerializedName("language") val language: String?,
         @SerializedName("alreadyRead") val alreadyRead: Boolean,
         @SerializedName("state") val state: Long,
-        @SerializedName("premiumAccess") val premiumAccess: Boolean
+        @SerializedName("premiumAccess") val premiumAccess: Boolean,
     )
 }

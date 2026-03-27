@@ -5,7 +5,7 @@ ext {
     extName = 'NovelBin'
     pkgNameSuffix = 'en.novelbin'
     extClass = '.NovelBin'
-    extVersionCode = 2
+    extVersionCode = 3
     libVersion = '1.0'
 }
 

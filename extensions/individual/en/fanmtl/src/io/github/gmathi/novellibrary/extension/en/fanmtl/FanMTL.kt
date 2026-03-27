@@ -19,7 +19,6 @@ import java.net.URLEncoder
 import java.util.regex.Pattern
 
 class FanMTL : ParsedHttpSource() {
-
     override val baseUrl: String
         get() = "https://www.fanmtl.com/"
     override val lang: String
@@ -32,12 +31,18 @@ class FanMTL : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("User-Agent", defaultUserAgent)
+            .add("Referer", baseUrl)
 
     //region Search Novel
-    override fun searchNovelsRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchNovelsRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val url = "$baseUrl/search?status=all&sort=views&q=${encodedQuery.replace(" ", "+")}&page=$page"
         return GET(url, headers)
@@ -46,9 +51,10 @@ class FanMTL : ParsedHttpSource() {
     override fun searchNovelsParse(response: Response): NovelsPage {
         val document = response.asJsoup()
 
-        val novels = document.select(searchNovelsSelector()).map { element ->
-            searchNovelsFromElement(element)
-        }
+        val novels =
+            document.select(searchNovelsSelector()).map { element ->
+                searchNovelsFromElement(element)
+            }
 
         val isLastPage = document.select("div.paginator a.btn.link").lastOrNull()?.hasClass("active") ?: true
         return NovelsPage(novels, !isLastPage)
@@ -56,22 +62,27 @@ class FanMTL : ParsedHttpSource() {
 
     override fun searchNovelsFromElement(element: Element): Novel {
         val aElement = element.selectFirst("a[href]")
-        val novel = Novel(
-            aElement.attr("title"),
-            aElement.attr("abs:href"),
-            this.id
-        )
+        val novel =
+            Novel(
+                aElement.attr("title"),
+                aElement.attr("abs:href"),
+                this.id,
+            )
         novel.imageUrl = element.selectFirst("img").attr("abs:data-src")
         novel.rating = element.selectFirst("div.rating span.score").text()
         return novel
     }
 
     override fun searchNovelsSelector() = "div.list.manga-list div.book-detailed-item"
+
     override fun searchNovelsNextPageSelector() = "li.next"
     //endregion
 
     //region Novel Details
-    override fun novelDetailsParse(novel: Novel, document: Document): Novel {
+    override fun novelDetailsParse(
+        novel: Novel,
+        document: Document,
+    ): Novel {
         val booksElement = document.body().select("div.book-info")
         val metaDataElement = booksElement.select("div.meta.box > p")
 
@@ -79,17 +90,31 @@ class FanMTL : ParsedHttpSource() {
         novel.longDescription =
             document.body().select("div.summary > p.content").joinToString(separator = "\n") { it.text() }
 
-        val script = document.body().select("script").firstOrNull { it.outerHtml().contains("bookId") }?.childNode(0)?.outerHtml()
-        val p = Pattern.compile("bookId\\s=\\s(.*?);", Pattern.DOTALL or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE or Pattern.MULTILINE) // Regex for the value of the key
+        val script =
+            document
+                .body()
+                .select("script")
+                .firstOrNull { it.outerHtml().contains("bookId") }
+                ?.childNode(0)
+                ?.outerHtml()
+        val p =
+            Pattern.compile(
+                "bookId\\s=\\s(.*?);",
+                Pattern.DOTALL or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE or Pattern.MULTILINE,
+            ) // Regex for the value of the key
         val m = p.matcher(script ?: "")
         if (m.find()) {
             novel.externalNovelId = m.group(1)
         }
 
-        novel.metadata["Author(s)"] = metaDataElement[0].select("a")
-            .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.attr("title")}</a>" }
-        novel.metadata["Genre(s)"] = metaDataElement[2].select("a")
-            .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.text().replace(" ,", "")}</a>" }
+        novel.metadata["Author(s)"] =
+            metaDataElement[0]
+                .select("a")
+                .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.attr("title")}</a>" }
+        novel.metadata["Genre(s)"] =
+            metaDataElement[2]
+                .select("a")
+                .joinToString(", ") { "<a href=\"${it.attr("abs:href")}\">${it.text().replace(" ,", "")}</a>" }
         novel.metadata["Status"] = metaDataElement[1].select("span").text()
         novel.chaptersCount = metaDataElement[3].select("span").text().toLong()
 
@@ -100,6 +125,7 @@ class FanMTL : ParsedHttpSource() {
     //region Chapters
 
     override fun chapterListSelector() = "ul#chapter-list > li"
+
     override fun chapterFromElement(element: Element): WebPage {
         val aElement = element.selectFirst("a")
         val url = aElement.attr("abs:href")
@@ -113,7 +139,10 @@ class FanMTL : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListParse(novel: Novel, response: Response): List<WebPage> {
+    override fun chapterListParse(
+        novel: Novel,
+        response: Response,
+    ): List<WebPage> {
         val document = response.asJsoup()
         return document.select(chapterListSelector()).reversed().mapIndexed { index, element ->
             val chapter = chapterFromElement(element)
@@ -127,23 +156,20 @@ class FanMTL : ParsedHttpSource() {
     //region stubs
 
     override fun latestUpdatesRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun latestUpdatesSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun latestUpdatesFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun latestUpdatesFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun latestUpdatesNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelsRequest(page: Int): Request = throw Exception(MISSING_IMPLEMENTATION)
+
     override fun popularNovelsSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
-    override fun popularNovelsFromElement(element: Element): Novel =
-        throw Exception(MISSING_IMPLEMENTATION)
+
+    override fun popularNovelsFromElement(element: Element): Novel = throw Exception(MISSING_IMPLEMENTATION)
 
     override fun popularNovelNextPageSelector(): String = throw Exception(MISSING_IMPLEMENTATION)
 
 //endregion
-
-    companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.193 Safari/537.36"
-    }
 }

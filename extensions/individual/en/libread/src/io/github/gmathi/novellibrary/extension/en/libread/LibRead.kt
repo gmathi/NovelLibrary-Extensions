@@ -199,7 +199,7 @@ class LibRead : ParsedHttpSource() {
         response: Response,
     ): List<WebPage> {
         val document = response.asJsoup()
-        return document.select(chapterListSelector()).reversed().mapIndexed { index, element ->
+        return document.select(chapterListSelector()).mapIndexed { index, element ->
             val chapter = chapterFromElement(element)
             chapter.orderId = index.toLong()
             chapter

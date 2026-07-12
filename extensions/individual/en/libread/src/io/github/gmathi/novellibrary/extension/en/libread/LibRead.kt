@@ -7,6 +7,7 @@ import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.network.POST
+import io.github.gmathi.novellibrary.util.Exceptions.MISSING_EXTERNAL_ID
 import io.github.gmathi.novellibrary.util.Exceptions.MISSING_IMPLEMENTATION
 import io.github.gmathi.novellibrary.util.network.asJsoup
 import okhttp3.FormBody
@@ -15,9 +16,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
+import org.json.JSONObject
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.regex.Pattern
 
 class LibRead : ParsedHttpSource() {
     override val baseUrl: String
@@ -37,6 +39,7 @@ class LibRead : ParsedHttpSource() {
             .Builder()
             .add("User-Agent", defaultUserAgent)
             .add("Referer", baseUrl)
+            .add("X-Requested-With", "XMLHttpRequest")
 
     //region Search Novel
     override fun searchNovelsRequest(
@@ -102,22 +105,24 @@ class LibRead : ParsedHttpSource() {
         novel: Novel,
         document: Document,
     ): Novel {
-        // Extract bookId from script (needed for chapter list API)
-        val script =
-            document
-                .body()
-                .select("script")
-                .firstOrNull { it.outerHtml().contains("bookId") }
-                ?.childNode(0)
-                ?.outerHtml()
-        val p =
-            Pattern.compile(
-                "bookId\\s=\\s(.*?);",
-                Pattern.DOTALL or Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE or Pattern.MULTILINE,
-            )
-        val m = p.matcher(script ?: "")
-        if (m.find()) {
-            novel.externalNovelId = m.group(1)
+        // Extract externalId from og:image meta tag
+        // e.g. https://libread.com/files/article/image/5/5505/5505s.jpg → 5505
+        val ogImage = document.selectFirst("meta[property=og:image]")?.attr("content")
+        if (ogImage != null) {
+            val idMatch = Regex("/image/\\d+/(\\d+)/").find(ogImage)
+            if (idMatch != null) {
+                novel.externalNovelId = (idMatch.groupValues[1].toLongOrNull() ?: -1L).toString()
+            }
+        }
+
+        // Extract short_name from og:url meta tag
+        // e.g. https://libread.com/libread/magus-reborn-42012 → magus-reborn
+        val ogUrl = document.selectFirst("meta[property=og:url]")?.attr("content")
+        if (ogUrl != null) {
+            val shortNameMatch = Regex("/libread/(.+)-(\\d+)$").find(ogUrl)
+            if (shortNameMatch != null) {
+                novel.metadata["short_name"] = shortNameMatch.groupValues[1]
+            }
         }
 
         novel.imageUrl = document.selectFirst("div.m-imgtxt div.pic img")?.attr("abs:src")
@@ -185,20 +190,37 @@ class LibRead : ParsedHttpSource() {
 
     //region Chapters
 
-    override fun chapterListSelector() = "#idData > li, ul.chapter-list > li"
+    override fun chapterListSelector() = "option[value]"
 
     override fun chapterFromElement(element: Element): WebPage {
-        val aElement = element.selectFirst("a")
-        val url = aElement.attr("abs:href")
-        val name = aElement.attr("title").ifBlank { aElement.text() }
+        val path = element.attr("value")
+        val url = "$baseUrl$path"
+        val name = element.text().trim()
         return WebPage(url, name)
+    }
+
+    override fun chapterListRequest(novel: Novel): Request {
+        val aid = novel.externalNovelId ?: throw Exception(MISSING_EXTERNAL_ID)
+        val acode = novel.metadata["short_name"] ?: throw Exception("Missing short_name metadata")
+        val url = "$baseUrl/api/chapterlist.php"
+        val formBody: RequestBody =
+            FormBody
+                .Builder()
+                .add("aid", aid)
+                .add("acode", acode)
+                .add("cid", "1")
+                .build()
+        return POST(url, headers, formBody)
     }
 
     override fun chapterListParse(
         novel: Novel,
         response: Response,
     ): List<WebPage> {
-        val document = response.asJsoup()
+        val jsonString = response.body?.string() ?: throw Exception("Empty response")
+        val jsonObject = JSONObject(jsonString)
+        val html = jsonObject.getString("html")
+        val document = Jsoup.parse(html)
         return document.select(chapterListSelector()).mapIndexed { index, element ->
             val chapter = chapterFromElement(element)
             chapter.orderId = index.toLong()

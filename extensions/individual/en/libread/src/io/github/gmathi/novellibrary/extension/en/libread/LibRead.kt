@@ -7,7 +7,6 @@ import io.github.gmathi.novellibrary.model.source.filter.FilterList
 import io.github.gmathi.novellibrary.model.source.online.ParsedHttpSource
 import io.github.gmathi.novellibrary.network.GET
 import io.github.gmathi.novellibrary.network.POST
-import io.github.gmathi.novellibrary.util.Exceptions.MISSING_EXTERNAL_ID
 import io.github.gmathi.novellibrary.util.Exceptions.MISSING_IMPLEMENTATION
 import io.github.gmathi.novellibrary.util.network.asJsoup
 import okhttp3.FormBody
@@ -190,42 +189,53 @@ class LibRead : ParsedHttpSource() {
 
     //region Chapters
 
-    override fun chapterListSelector() = "option[value]"
+    override fun chapterListSelector() = "li"
 
     override fun chapterFromElement(element: Element): WebPage {
-        val path = element.attr("value")
-        val url = "$baseUrl$path"
-        val name = element.text().trim()
+        val aElement = element.selectFirst("a")
+        val url = aElement.attr("abs:href")
+        val name = aElement.attr("title").ifBlank { aElement.text() }
         return WebPage(url, name)
     }
 
-    override fun chapterListRequest(novel: Novel): Request {
-        val aid = novel.externalNovelId ?: throw Exception(MISSING_EXTERNAL_ID)
-        val acode = novel.metadata["short_name"] ?: throw Exception("Missing short_name metadata")
-        val url = "$baseUrl/api/chapterlist.php"
-        val formBody: RequestBody =
-            FormBody
-                .Builder()
-                .add("aid", aid)
-                .add("acode", acode)
-                .add("cid", "1")
-                .build()
-        return POST(url, headers, formBody)
+    override fun chapterListRequest(novel: Novel): Request = chapterListPageRequest(novel, 1)
+
+    private fun chapterListPageRequest(
+        novel: Novel,
+        page: Int,
+    ): Request {
+        val url = "${novel.url}?ajax=chapters&page=$page&pageSize=$CHAPTER_LIST_PAGE_SIZE"
+        return GET(url, headers)
     }
 
     override fun chapterListParse(
         novel: Novel,
         response: Response,
     ): List<WebPage> {
-        val jsonString = response.body?.string() ?: throw Exception("Empty response")
-        val jsonObject = JSONObject(jsonString)
-        val html = jsonObject.getString("html")
-        val document = Jsoup.parse(html)
-        return document.select(chapterListSelector()).mapIndexed { index, element ->
-            val chapter = chapterFromElement(element)
-            chapter.orderId = index.toLong()
-            chapter
+        val chapters = ArrayList<WebPage>()
+        var orderId = 0L
+
+        fun appendChaptersFromHtml(html: String) {
+            val fragment = Jsoup.parseBodyFragment(html, novel.url)
+            fragment.select(chapterListSelector()).forEach { element ->
+                val chapter = chapterFromElement(element)
+                chapter.orderId = orderId++
+                chapters.add(chapter)
+            }
         }
+
+        val firstJson = JSONObject(response.body?.string() ?: throw Exception("Empty response"))
+        appendChaptersFromHtml(firstJson.getString("html"))
+
+        val totalPage = firstJson.optInt("totalPage", 1)
+        for (page in 2..totalPage) {
+            val pageResponse = client.newCall(chapterListPageRequest(novel, page)).execute()
+            val jsonString = pageResponse.body?.string() ?: continue
+            val jsonObject = JSONObject(jsonString)
+            appendChaptersFromHtml(jsonObject.getString("html"))
+        }
+
+        return chapters
     }
 
     //endregion
@@ -279,4 +289,8 @@ class LibRead : ParsedHttpSource() {
     override fun popularNovelNextPageSelector(): String = "div.paginator a.btn.link:not(.active)"
 
     //endregion
+
+    companion object {
+        private const val CHAPTER_LIST_PAGE_SIZE = 200
+    }
 }

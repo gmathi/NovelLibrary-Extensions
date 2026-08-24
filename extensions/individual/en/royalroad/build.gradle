@@ -5,7 +5,7 @@ ext {
     extName = 'RoyalRoad'
     pkgNameSuffix = 'en.royalroad'
     extClass = '.RoyalRoad'
-    extVersionCode = 5
+    extVersionCode = 6
     libVersion = '1.0'
 }
 

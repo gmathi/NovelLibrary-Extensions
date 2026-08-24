@@ -46,11 +46,10 @@ class RoyalRoad : ParsedHttpSource() {
         val novel = Novel(titleElement.text(), titleElement.attr("abs:href"), id)
         novel.imageUrl = element.selectFirst("img[src]")?.attr("abs:src")
 
-        // Author fallback: try span.author, then derive from CDN image path
+        // Author is not shown on the search results page; it's populated in novelDetailsParse.
         val authorText = element.selectFirst("span.author")?.text()
-        novel.metadata["Author"] = if (authorText != null && authorText.length > 3) authorText.substring(3) else null
-        if (novel.metadata["Author"] == null && novel.imageUrl?.startsWith("https://www.royalroadcdn.com/") == true) {
-            novel.metadata["Author"] = novel.imageUrl?.substring(29, novel.imageUrl?.indexOf('/', 29) ?: 0)
+        if (authorText != null && authorText.length > 3) {
+            novel.metadata["Author"] = authorText.substring(3)
         }
 
         novel.rating = element.selectFirst("span.star[title]")?.attr("title")
@@ -203,7 +202,7 @@ class RoyalRoad : ParsedHttpSource() {
     //endregion
 
     //region Chapters
-    override fun chapterListSelector() = "table#chapters a[href]"
+    override fun chapterListSelector() = "table#chapters tr.chapter-row td:first-child a[href]"
 
     override fun chapterFromElement(element: Element) = WebPage(element.absUrl("href"), element.text())
 

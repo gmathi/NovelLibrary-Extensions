@@ -65,10 +65,10 @@
   {
     "name": "NovelLibrary: LibRead",
     "pkg": "io.github.gmathi.novellibrary.extension.en.libread",
-    "apk": "novellibrary-en.libread-v1.0.4.apk",
+    "apk": "novellibrary-en.libread-v1.0.5.apk",
     "lang": "en",
-    "code": 4,
-    "version": "1.0.4",
+    "code": 5,
+    "version": "1.0.5",
     "nsfw": 0
   }
 ]

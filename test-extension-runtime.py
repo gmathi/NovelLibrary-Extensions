@@ -125,31 +125,20 @@ EXTENSIONS = [
     },
     {
         "name": "NovelBuddy",
-        "base_url": "https://novelbuddy.com",
-        "search_url_template": "https://novelbuddy.com/search?status=all&sort=views&q={query}&page=1",
-        "search_selector": "div.list.manga-list div.book-detailed-item",
-        "novel_link_selector": "a[title]",
-        "details_description_selector": "div.summary p.content",
-        "details_author_selector": "div.meta.box p a",
-        "details_genres_selector": "div.meta.box p a",
+        "base_url": "https://novelbuddy.me",
+        "search_url_template": "https://api.novelbuddy.me/titles/search?q={query}&page=1",
+        "search_selector": None,  # JSON API
+        "novel_link_selector": None,
+        "details_url_template": "https://api.novelbuddy.me/titles/{id}",
+        "details_description_selector": None,
+        "details_author_selector": None,
+        "details_genres_selector": None,
         "chapter_list_ajax": True,
-        "chapter_ajax_selector": "script",
-        "chapter_ajax_regex": r"bookId\s*=\s*(\d+)",
-        "chapter_ajax_url_template": "https://novelbuddy.com/api/manga/{id}/chapters?source=detail",
-        "chapter_selector": "ul#chapter-list li a",
-    },
-    {
-        "name": "LNMTL",
-        "base_url": "https://lnmtl.com",
-        "search_url_template": "https://lnmtl.com/home",  # Special: loads all novels in script tag
-        "search_selector": "script[type]",
-        "novel_link_selector": None,  # Special handling needed
-        "details_description_selector": ".novel .media .description",
-        "details_author_selector": "dt:contains(Authors) + dd span",
-        "details_genres_selector": "div.panel-heading:contains(Genres) + div ul li",
-        "chapter_list_ajax": False,
-        "chapter_selector": "script",  # Special: chapters in script tag
-        "special_search": "lnmtl",  # Flag for special search handling
+        "chapter_ajax_url_template": "https://api.novelbuddy.me/titles/{id}/chapters",
+        "chapter_selector": None,
+        "special_search": "novelbuddy",   # JSON API
+        "special_details": "novelbuddy",   # JSON API
+        "special_chapters": "novelbuddy",  # JSON API
     },
     {
         "name": "EmpireNovel",
@@ -198,7 +187,7 @@ EXTENSIONS = [
         "name": "Ranobes",
         "base_url": "https://ranobes.net",
         "search_url_template": "https://ranobes.net/index.php?do=search",
-        "search_selector": "div.block.story.shortstory.mod-poster",
+        "search_selector": ".block.story.shortstory.mod-poster",
         "novel_link_selector": "h2.title a",
         "details_description_selector": "[itemprop=description]",
         "details_author_selector": "span[itemprop=alternateName]",
@@ -239,6 +228,24 @@ EXTENSIONS = [
         "special_search": "purrfiction",  # JSON API
         "special_details": "purrfiction",  # JSON API
         "special_chapters": "purrfiction",  # JSON API
+    },
+    {
+        "name": "LibRead",
+        "base_url": "https://libread.com",
+        # POST search: form body searchkey={query} to /search
+        "search_url_template": "https://libread.com/search",
+        "search_post": True,
+        "search_post_data": {"searchkey": "{query}"},
+        "search_selector": "div.li-row",
+        "novel_link_selector": "h3.tit a[href]",
+        "details_description_selector": "div.m-desc div.txt div.inner p",
+        "details_author_selector": "div.m-imgtxt div.item div.right a",
+        "details_genres_selector": "div.m-imgtxt div.item div.right a",
+        # Chapters: GET {novel_url}?ajax=chapters&page=1&pageSize=200 -> JSON {html,totalPage}
+        "chapter_list_ajax": True,
+        "chapter_ajax_url_template": "{novel_url}?ajax=chapters&page=1&pageSize=200",
+        "chapter_ajax_json_html": True,   # response is JSON with an "html" fragment
+        "chapter_selector": "li a",
     },
     {
         "name": "JPMTL",
@@ -341,17 +348,55 @@ class E2ETester:
             result.search_url = search_url
             
             start = time.time()
-            response = self._make_request(
-                search_url,
-                timeout=30,
-                headers={'Referer': config["base_url"]}
-            )
+            if config.get("search_post"):
+                # POST-based search (LibRead: form body searchkey={query})
+                post_data = {
+                    k: v.format(query=search_term)
+                    for k, v in config.get("search_post_data", {}).items()
+                }
+                response = self._make_request(
+                    search_url,
+                    method='POST',
+                    data=post_data,
+                    timeout=30,
+                    headers={
+                        'Referer': config["base_url"],
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                )
+            else:
+                response = self._make_request(
+                    search_url,
+                    timeout=30,
+                    headers={'Referer': config["base_url"]}
+                )
             result.search_time = (time.time() - start) * 1000
             result.search_status = response.status_code
             
             if response.status_code != 200:
                 result.search_error = f"HTTP {response.status_code}"
                 return False
+            
+            # NovelBuddy JSON API: {"data": {"items": [...], "pagination": {...}}}
+            if config.get("special_search") == "novelbuddy":
+                import json as json_lib
+                try:
+                    data = json_lib.loads(response.text).get("data", {})
+                    items = data.get("items", [])
+                    result.search_result_count = len(items)
+                    if not items:
+                        result.search_error = "No results found"
+                        return False
+                    first = items[0]
+                    result.novel_id = first.get("id")
+                    result.novel_title = first.get("name", "Unknown")
+                    rel = first.get("url") or f"/{result.novel_id}"
+                    result.novel_url = config["base_url"] + rel
+                    result.search_success = True
+                    return True
+                except (ValueError, KeyError, IndexError) as e:
+                    result.search_error = f"Failed to parse JSON: {str(e)}"
+                    return False
             
             # Special handling for JSON API extensions
             if config.get("special_search") in ["purrfiction", "jpmtl"]:
@@ -395,60 +440,46 @@ class E2ETester:
                     result.search_error = f"Failed to parse JSON: {str(e)}"
                     return False
             
-            soup = BeautifulSoup(response.content, 'lxml')
+            # Ranobes: POST search with a form body (matches the fixed extension,
+            # which sends the FormBody and follows the redirect to /search/{q}/).
+            if config.get("special_search") == "ranobes":
+                post_response = self._make_request(
+                    search_url,
+                    method='POST',
+                    data={
+                        "do": "search",
+                        "subaction": "search",
+                        "search_start": "1",
+                        "full_search": "0",
+                        "result_from": "1",
+                        "story": search_term,
+                    },
+                    timeout=30,
+                    headers={'Referer': config["base_url"]},
+                    allow_redirects=True,
+                )
+                result.search_status = post_response.status_code
+                if post_response.status_code != 200:
+                    result.search_error = f"HTTP {post_response.status_code}"
+                    return False
+                soup = BeautifulSoup(post_response.content, 'lxml')
+                results = soup.select(config["search_selector"])
+                result.search_result_count = len(results)
+                if len(results) == 0:
+                    result.search_error = "No results found"
+                    return False
+                link = results[0].select_one(config["novel_link_selector"])
+                if not link:
+                    result.search_error = "Could not find novel link"
+                    return False
+                result.novel_url = link.get('href')
+                if not result.novel_url.startswith('http'):
+                    result.novel_url = config["base_url"] + result.novel_url
+                result.novel_title = link.get('title') or link.get_text(strip=True)
+                result.search_success = True
+                return True
             
-            # Special handling for LNMTL
-            if config.get("special_search") == "lnmtl":
-                # LNMTL loads all novels in a script tag
-                scripts = soup.select(config["search_selector"])
-                if not scripts:
-                    result.search_error = "No script tags found"
-                    return False
-                
-                # Find the script with novel data
-                script = scripts[-1] if scripts else None
-                if not script:
-                    result.search_error = "Could not find novels script"
-                    return False
-                
-                text = script.string or ""
-                if "local:" not in text:
-                    result.search_error = "Script doesn't contain novel data"
-                    return False
-                
-                # Extract JSON from script
-                import json as json_lib
-                try:
-                    json_start = text.index("local:") + 7
-                    json_text = text[json_start:].split(']')[0] + ']'
-                    novels = json_lib.loads(json_text)
-                    
-                    # Filter by search term
-                    matching_novels = [n for n in novels if search_term.lower() in n.get('name', '').lower()]
-                    result.search_result_count = len(matching_novels)
-                    
-                    if len(matching_novels) == 0:
-                        result.search_error = "No matching novels found"
-                        return False
-                    
-                    # Get first matching novel
-                    first_novel = matching_novels[0]
-                    result.novel_url = first_novel.get('url')
-                    result.novel_title = first_novel.get('name')
-                    
-                    if not result.novel_url:
-                        result.search_error = "Could not extract novel URL"
-                        return False
-                    
-                    if not result.novel_url.startswith('http'):
-                        result.novel_url = config["base_url"] + result.novel_url
-                    
-                    result.search_success = True
-                    return True
-                    
-                except (ValueError, KeyError, IndexError) as e:
-                    result.search_error = f"Failed to parse novel data: {str(e)}"
-                    return False
+            soup = BeautifulSoup(response.content, 'lxml')
             
             # Standard search handling
             results = soup.select(config["search_selector"])
@@ -486,6 +517,34 @@ class E2ETester:
     def _test_novel_details(self, config: Dict, result: E2ETestResult) -> bool:
         """Test novel details page"""
         try:
+            # NovelBuddy: fetch details from the JSON API by novel id
+            if config.get("special_details") == "novelbuddy":
+                import json as json_lib
+                details_url = config["details_url_template"].format(id=result.novel_id)
+                start = time.time()
+                response = self._make_request(
+                    details_url, timeout=30,
+                    headers={'Referer': config["base_url"] + "/"}
+                )
+                result.details_time = (time.time() - start) * 1000
+                result.details_status = response.status_code
+                if response.status_code != 200:
+                    result.details_error = f"HTTP {response.status_code}"
+                    return False
+                try:
+                    title = json_lib.loads(response.text).get("data", {}).get("title", {})
+                    if not title:
+                        result.details_error = "No 'data.title' in JSON"
+                        return False
+                    result.details_has_description = bool(title.get("summary"))
+                    result.details_has_author = len(title.get("authors", []) or []) > 0
+                    result.details_has_genres = len(title.get("genres", []) or []) > 0
+                    result.details_success = True
+                    return True
+                except (ValueError, KeyError) as e:
+                    result.details_error = f"Failed to parse JSON: {str(e)}"
+                    return False
+
             start = time.time()
             response = self._make_request(
                 result.novel_url,
@@ -554,7 +613,35 @@ class E2ETester:
         try:
             start = time.time()
             
-            # Special handling for PurrFiction JSON API
+            # NovelBuddy JSON API: GET /titles/{id}/chapters -> {"data": {"chapters": [...]}}
+            if config.get("special_chapters") == "novelbuddy":
+                import json as json_lib
+                if not result.novel_id:
+                    result.chapters_error = "No novel ID available"
+                    return False
+                chapter_url = config["chapter_ajax_url_template"].format(id=result.novel_id)
+                response = self._make_request(
+                    chapter_url, timeout=30,
+                    headers={'Referer': result.novel_url}
+                )
+                result.chapters_time = (time.time() - start) * 1000
+                result.chapters_status = response.status_code
+                if response.status_code != 200:
+                    result.chapters_error = f"HTTP {response.status_code}"
+                    return False
+                try:
+                    chapters = json_lib.loads(response.text).get("data", {}).get("chapters", [])
+                    result.chapters_count = len(chapters)
+                    if not chapters:
+                        result.chapters_error = "No chapters found"
+                        return False
+                    result.chapters_success = True
+                    return True
+                except (ValueError, KeyError) as e:
+                    result.chapters_error = f"Failed to parse JSON: {str(e)}"
+                    return False
+            
+
             if config.get("special_chapters") == "purrfiction":
                 if not result.novel_id:
                     result.chapters_error = "No novel ID available"
@@ -623,6 +710,36 @@ class E2ETester:
             
             if config.get("chapter_list_ajax"):
                 # AJAX-based chapter list
+                if config.get("chapter_ajax_json_html"):
+                    # LibRead: GET {novel_url}?ajax=chapters... -> JSON {"html": "...", "totalPage": N}
+                    import json as json_lib
+                    chapter_url = config["chapter_ajax_url_template"].format(novel_url=result.novel_url)
+                    response = self._make_request(
+                        chapter_url,
+                        timeout=30,
+                        headers={
+                            'Referer': result.novel_url,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        }
+                    )
+                    result.chapters_time = (time.time() - start) * 1000
+                    result.chapters_status = response.status_code
+                    if response.status_code != 200:
+                        result.chapters_error = f"HTTP {response.status_code}"
+                        return False
+                    try:
+                        html_fragment = json_lib.loads(response.text).get("html", "")
+                    except (ValueError, KeyError) as e:
+                        result.chapters_error = f"Failed to parse JSON: {str(e)}"
+                        return False
+                    soup = BeautifulSoup(html_fragment, 'lxml')
+                    chapters = soup.select(config["chapter_selector"])
+                    result.chapters_count = len(chapters)
+                    if not chapters:
+                        result.chapters_error = "No chapters found"
+                        return False
+                    result.chapters_success = True
+                    return True
                 if config.get("chapter_ajax_post_empty"):
                     # POST with empty body (EmpireNovel, BoxNovel)
                     chapter_url = config["chapter_ajax_url_template"].format(novel_url=result.novel_url)
@@ -798,26 +915,64 @@ def main():
         print()
     
     tester = E2ETester()
+
+    def run_batch(configs, workers, label):
+        """Run a batch of extensions and return {name: [results]}."""
+        if not json_output and label:
+            print(f"\n{'='*70}\n{label}\n{'='*70}")
+        batch = {}
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+            future_to_config = {
+                executor.submit(test_extension_with_terms, tester, config): config
+                for config in configs
+            }
+            for future in as_completed(future_to_config):
+                config = future_to_config[future]
+                try:
+                    batch[config['name']] = future.result()
+                except Exception as e:
+                    if not json_output:
+                        print(f"\n❌ {config['name']} - Exception: {str(e)}")
+                    batch[config['name']] = []
+        return batch
+
+    # ── Phase 1: run everything in PARALLEL (fast) ────────────────────
+    if single_extension:
+        # Single extension: one serial run, no retry phase needed.
+        results_by_name = run_batch(extensions_to_test, 1, "")
+    else:
+        results_by_name = run_batch(
+            extensions_to_test, len(extensions_to_test),
+            "PHASE 1 — Parallel run (all extensions)"
+        )
+
+        # ── Phase 2: re-run FAILURES SEQUENTIALLY ─────────────────────
+        # Parallel bursts cause false failures (rate-limiting, DNS/SSL
+        # blips, transient 403/timeouts). Any extension that failed all
+        # terms is retried one-at-a-time with per-host rate limiting; a
+        # sequential PASS overrides the parallel FAIL.
+        failed_configs = [
+            cfg for cfg in extensions_to_test
+            if not any(r.overall_success for r in results_by_name.get(cfg['name'], []))
+        ]
+        if failed_configs:
+            if not json_output:
+                names = ', '.join(c['name'] for c in failed_configs)
+                print(f"\n{'='*70}\nPHASE 2 — Sequential retry of {len(failed_configs)} "
+                      f"parallel failure(s): {names}\n{'='*70}")
+            retry = run_batch(failed_configs, 1, "")
+            for name, results in retry.items():
+                # Keep whichever run actually passed; else keep the retry
+                # (sequential) result as the authoritative failure record.
+                prev = results_by_name.get(name, [])
+                if any(r.overall_success for r in results):
+                    results_by_name[name] = results
+                elif not any(r.overall_success for r in prev):
+                    results_by_name[name] = results
+
     all_results: List[E2ETestResult] = []
-    
-    # Test extensions in parallel (or single extension)
-    max_workers = 1 if single_extension else len(extensions_to_test)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all extension tests
-        future_to_config = {
-            executor.submit(test_extension_with_terms, tester, config): config 
-            for config in extensions_to_test
-        }
-        
-        # Collect results as they complete
-        for future in as_completed(future_to_config):
-            config = future_to_config[future]
-            try:
-                results = future.result()
-                all_results.extend(results)
-            except Exception as e:
-                if not json_output:
-                    print(f"\n❌ {config['name']} - Exception: {str(e)}")
+    for results in results_by_name.values():
+        all_results.extend(results)
     
     # Print summary
     if not json_output:
@@ -825,7 +980,7 @@ def main():
         print("SUMMARY")
         print("="*70)
     
-    # Group results by extension
+    # Group results by extension (preserve EXTENSIONS order where possible)
     extensions_tested = {}
     for result in all_results:
         if result.name not in extensions_tested:

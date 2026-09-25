@@ -55,7 +55,8 @@ class Ranobes : ParsedHttpSource() {
                 .add("full_search", "0")
                 .add("result_from", "${((page - 1) * 10) + 1}")
                 .add("story", query)
-        return POST(url, headers)
+                .build()
+        return POST(url, headers, requestBody)
     }
 
     override fun searchNovelsFromElement(element: Element): Novel {
@@ -70,7 +71,7 @@ class Ranobes : ParsedHttpSource() {
         return novel
     }
 
-    override fun searchNovelsSelector() = "div.block.story.shortstory.mod-poster"
+    override fun searchNovelsSelector() = ".block.story.shortstory.mod-poster"
 
     override fun searchNovelsNextPageSelector() = "a#nextlink"
     //endregion

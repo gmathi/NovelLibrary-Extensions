@@ -34,11 +34,17 @@ class ScribbleHub : ParsedHttpSource() {
     override val client: OkHttpClient
         get() = network.cloudflareClient
 
+    // Matches the numeric series id in URLs like /series/123456/some-slug/
+    private val seriesIdRegex = Regex("""/series/(\d+)""")
+
     override fun headersBuilder(): Headers.Builder =
         Headers
             .Builder()
             .add("User-Agent", defaultUserAgent)
             .add("Referer", baseUrl)
+            .add("Origin", baseUrl)
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            .add("Accept-Language", "en-US,en;q=0.5")
 
     //region Search Novel
     override fun searchNovelsRequest(
@@ -47,7 +53,7 @@ class ScribbleHub : ParsedHttpSource() {
         filters: FilterList,
     ): Request {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "$baseUrl/?s=${encodedQuery.replace(" ", "+")}&post_type=fictionposts&paged=$page"
+        val url = "$baseUrl/series-finder/?sf=1&sh=${encodedQuery.replace(" ", "+")}&sort=views&order=desc&pg=$page"
         return GET(url, headers)
     }
 
@@ -99,16 +105,29 @@ class ScribbleHub : ParsedHttpSource() {
 
     //region Chapters
 
-    override fun chapterListSelector() = "a[href]"
+    // The wi_gettocchp AJAX endpoint returns an HTML fragment where each chapter is an
+    // <a class="toc_a"> inside <li class="toc_w">. Targeting the class avoids picking up
+    // unrelated links, and text() is the reliable chapter name (the title attr is often empty).
+    override fun chapterListSelector() = "a.toc_a[href]"
 
-    override fun chapterFromElement(element: Element) = WebPage(element.attr("abs:href"), element.attr("title"))
+    override fun chapterFromElement(element: Element): WebPage {
+        val url = element.attr("abs:href").ifBlank { element.attr("href") }
+        val name = element.attr("title").ifBlank { element.text() }.trim()
+        return WebPage(url, name)
+    }
 
     override fun chapterListParse(
         novel: Novel,
         response: Response,
     ): List<WebPage> {
         val document = response.asJsoup()
-        return document.select(chapterListSelector()).reversed().mapIndexed { index, element ->
+        var elements = document.select(chapterListSelector())
+        // Fallback: if the fragment structure changes, fall back to any anchor with an href.
+        if (elements.isEmpty()) {
+            elements = document.select("a[href]")
+        }
+        // ScribbleHub returns chapters newest-first; reverse so orderId ascends with release order.
+        return elements.reversed().mapIndexed { index, element ->
             val chapter = chapterFromElement(element)
             chapter.orderId = index.toLong()
             chapter
@@ -116,9 +135,15 @@ class ScribbleHub : ParsedHttpSource() {
     }
 
     override fun chapterListRequest(novel: Novel): Request {
+        // The TOC AJAX needs the numeric series id. Prefer the id captured during details
+        // parsing, but fall back to extracting it from the series URL (/series/{id}/{slug}/)
+        // so chapters still load even if novelDetailsParse never ran or was blocked.
         val scribbleNovelId =
-            novel.externalNovelId ?: novel.metadata["PostId"] ?: throw Exception(INVALID_NOVEL)
-        val url = "https://www.scribblehub.com/wp-admin/admin-ajax.php"
+            novel.externalNovelId
+                ?: novel.metadata["PostId"]
+                ?: novel.url.let { seriesIdRegex.find(it)?.groupValues?.get(1) }
+                ?: throw Exception(INVALID_NOVEL)
+        val url = "$baseUrl/wp-admin/admin-ajax.php"
         val formBody: RequestBody =
             FormBody
                 .Builder()
@@ -127,7 +152,7 @@ class ScribbleHub : ParsedHttpSource() {
                 .add("strmypostid", "0")
                 .add("strFic", "yes")
                 .build()
-        return POST(url, body = formBody)
+        return POST(url, headers = headers, body = formBody)
     }
 
     //endregion
